@@ -52,6 +52,10 @@ def handle_client_error(error: Exception) -> NoReturn:
     Raises:
         ToolError: Always raised with a descriptive message.
     """
+    # If a ToolError was raised upstream, preserve it — don't re-wrap under
+    # the "Unexpected error" fallback which would lose the original message.
+    if isinstance(error, ToolError):
+        raise error
     if isinstance(error, UnraidAuthError):
         raise ToolError(f"Authentication failed: {error}. Check your API key.") from error
     if isinstance(error, UnraidNotFoundError):
