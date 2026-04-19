@@ -38,6 +38,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `UNRAID_NEW_USER_` allowlist prefix. Lets operators keep the cleartext
   password out of MCP transcripts by reading it from a server-side env
   var instead of passing it as a tool argument (#30).
+- Per-request observability in `BaseGraphQLClient`. Each round trip logs
+  `graphql <operation> -> HTTP <status> in <ms>` at INFO; failures and
+  HTTP >= 400 log at WARNING. Operation name comes from
+  `payload.operationName` or is parsed from the GraphQL document
+  (`query Foo { ... }` → `Foo`); anonymous documents log as
+  `<anonymous>` (#37).
 
 ### Changed
 - `validate_connection()` now propagates typed `UnraidError` subclasses
@@ -58,6 +64,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `unraid_create_user` accepts `password` xor `password_env_var` (previously
   `password` was required and positional). Existing inline-password callers
   are unchanged; the default path is unchanged (#30).
+- `validate_connection` now bypasses the `tenacity` retry loop and uses a
+  5-second timeout, so a typo'd `UNRAID_HOST` fails in seconds instead of
+  blocking startup for up to ~90s (#34).
 - Pre-commit hooks now run `ruff` and `mypy` via `uv run` (`language: system`)
   so pre-commit and CI share one toolchain, eliminating version drift
   between pinned hook revs and `pyproject.toml`'s dev extras (#10).
@@ -65,7 +74,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   structure instead of fictional per-domain subdirectories (#22).
 
 ### Coverage / quality
-- Tests: 66 → 143 passing.
+- Tests: 66 → 148 passing.
 - Coverage: 49% → 85% overall; `fail_under` raised from 40 to 80.
 - Tool-layer coverage: 29–48% → 66–93%.
 - Models: 0% used → 100% integrated.
