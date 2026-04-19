@@ -6,7 +6,8 @@ from typing import Any
 
 from fastmcp import Context, FastMCP
 
-from unraid_mcp.errors import handle_client_error
+from unraid_mcp.errors import UnraidNotFoundError, handle_client_error
+from unraid_mcp.models.docker import DockerContainer, DockerNetwork
 from unraid_mcp.tools._helpers import require_client, require_readwrite
 
 
@@ -16,7 +17,7 @@ def register_docker_tools(mcp: FastMCP) -> None:
     # ── Read tools ──────────────────────────────────────────────────────
 
     @mcp.tool(tags={"docker"})
-    async def unraid_list_containers(ctx: Context) -> list[dict[str, Any]]:
+    async def unraid_list_containers(ctx: Context) -> list[DockerContainer]:
         """List all Docker containers with status, image, ports, and network mode."""
         try:
             client = require_client(ctx)
@@ -25,7 +26,7 @@ def register_docker_tools(mcp: FastMCP) -> None:
             handle_client_error(e)
 
     @mcp.tool(tags={"docker"})
-    async def unraid_get_container(ctx: Context, container_id: str) -> dict[str, Any]:
+    async def unraid_get_container(ctx: Context, container_id: str) -> DockerContainer:
         """Get detailed info for a specific Docker container by ID or name.
 
         Args:
@@ -36,17 +37,17 @@ def register_docker_tools(mcp: FastMCP) -> None:
             containers = await client.list_containers()
             target = container_id.lstrip("/")
             for container in containers:
-                if container.get("id") == container_id:
+                if container.id == container_id:
                     return container
-                names = container.get("names") or []
+                names = container.names or []
                 if any(name.lstrip("/") == target for name in names):
                     return container
-            return {"error": f"Container '{container_id}' not found"}
+            raise UnraidNotFoundError(f"Container '{container_id}' not found")
         except Exception as e:
             handle_client_error(e)
 
     @mcp.tool(tags={"docker"})
-    async def unraid_list_docker_networks(ctx: Context) -> list[dict[str, Any]]:
+    async def unraid_list_docker_networks(ctx: Context) -> list[DockerNetwork]:
         """List Docker networks (id, name, driver, scope)."""
         try:
             client = require_client(ctx)

@@ -7,6 +7,7 @@ from typing import Any
 from fastmcp import Context, FastMCP
 
 from unraid_mcp.errors import handle_client_error
+from unraid_mcp.models.array import ParityHistoryEntry
 from unraid_mcp.tools._helpers import require_client, require_readwrite
 
 
@@ -14,7 +15,7 @@ def register_parity_tools(mcp: FastMCP) -> None:
     """Register parity check tools."""
 
     @mcp.tool(tags={"array", "parity"})
-    async def unraid_get_parity_history(ctx: Context) -> list[dict[str, Any]]:
+    async def unraid_get_parity_history(ctx: Context) -> list[ParityHistoryEntry]:
         """List historical parity check runs (date, duration, speed, errors)."""
         try:
             client = require_client(ctx)

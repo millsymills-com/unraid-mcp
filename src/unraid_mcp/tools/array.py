@@ -7,6 +7,7 @@ from typing import Any
 from fastmcp import Context, FastMCP
 
 from unraid_mcp.errors import handle_client_error
+from unraid_mcp.models.array import ArrayState
 from unraid_mcp.tools._helpers import require_client, require_readwrite
 
 
@@ -14,7 +15,7 @@ def register_array_tools(mcp: FastMCP) -> None:
     """Register array tools."""
 
     @mcp.tool(tags={"array"})
-    async def unraid_get_array(ctx: Context) -> dict[str, Any]:
+    async def unraid_get_array(ctx: Context) -> ArrayState:
         """Get array status, capacity, parity disks, data disks, and cache disks."""
         try:
             client = require_client(ctx)

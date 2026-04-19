@@ -7,6 +7,7 @@ from typing import Any
 from fastmcp import Context, FastMCP
 
 from unraid_mcp.errors import handle_client_error
+from unraid_mcp.models.system import SystemInfo
 from unraid_mcp.tools._helpers import require_client
 
 
@@ -14,7 +15,7 @@ def register_system_tools(mcp: FastMCP) -> None:
     """Register system info tools."""
 
     @mcp.tool(tags={"system"})
-    async def unraid_get_info(ctx: Context) -> dict[str, Any]:
+    async def unraid_get_info(ctx: Context) -> SystemInfo:
         """Get system information: OS, CPU, memory, baseboard, and component versions."""
         try:
             client = require_client(ctx)

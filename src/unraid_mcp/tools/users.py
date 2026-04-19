@@ -8,6 +8,7 @@ from fastmcp import Context, FastMCP
 from pydantic import Field
 
 from unraid_mcp.errors import handle_client_error
+from unraid_mcp.models.users import User
 from unraid_mcp.tools._helpers import require_client, require_readwrite
 
 
@@ -15,7 +16,7 @@ def register_user_tools(mcp: FastMCP) -> None:
     """Register user tools."""
 
     @mcp.tool(tags={"users"})
-    async def unraid_list_users(ctx: Context) -> list[dict[str, Any]]:
+    async def unraid_list_users(ctx: Context) -> list[User]:
         """List Unraid users (id, name, description, roles)."""
         try:
             client = require_client(ctx)
