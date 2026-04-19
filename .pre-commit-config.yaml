@@ -14,23 +14,26 @@ repos:
       - id: no-commit-to-branch
         args: ["--branch", "main"]
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.8
+  # Use local hooks so pre-commit and CI share a single toolchain via uv,
+  # avoiding version drift between pinned hook revs and pyproject extras.
+  - repo: local
     hooks:
       - id: ruff
-        args: ["--fix"]
+        name: ruff (uv)
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
       - id: ruff-format
-
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.10.0
-    hooks:
+        name: ruff format (uv)
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
       - id: mypy
-        additional_dependencies:
-          - pydantic>=2.6.0
-          - pydantic-settings>=2.2.0
-          - fastmcp>=3.2.0
-          - httpx>=0.27.0
-          - tenacity>=8.2.0
-        args: ["--config-file=pyproject.toml"]
+        name: mypy (uv)
+        entry: uv run mypy src/unraid_mcp/
+        language: system
+        types: [python]
         pass_filenames: false
-        entry: mypy src/unraid_mcp/
+        require_serial: true
