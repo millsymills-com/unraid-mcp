@@ -6,6 +6,14 @@ import logging
 from typing import Any
 
 from unraid_mcp.clients.base import BaseGraphQLClient
+from unraid_mcp.models.array import ArrayState, ParityHistoryEntry
+from unraid_mcp.models.disks import Disk
+from unraid_mcp.models.docker import DockerContainer, DockerNetwork
+from unraid_mcp.models.notifications import Notification
+from unraid_mcp.models.shares import Share
+from unraid_mcp.models.system import SystemInfo
+from unraid_mcp.models.users import User
+from unraid_mcp.models.vms import Vms
 
 logger = logging.getLogger(__name__)
 
@@ -233,62 +241,76 @@ class UnraidClient(BaseGraphQLClient):
 
     # ── Read methods ────────────────────────────────────────────────────
 
-    async def get_info(self) -> dict[str, Any]:
+    async def get_info(self) -> SystemInfo:
         """Get system information (OS, CPU, memory, baseboard, versions)."""
         result = await self.query(QUERY_INFO)
-        return result.get("info", {})  # type: ignore[no-any-return]
+        return SystemInfo.model_validate(result.get("info") or {})
 
-    async def get_array(self) -> dict[str, Any]:
+    async def get_array(self) -> ArrayState:
         """Get array status, capacity, parity, disks, and caches."""
         result = await self.query(QUERY_ARRAY)
-        return result.get("array", {})  # type: ignore[no-any-return]
+        return ArrayState.model_validate(result.get("array") or {})
 
-    async def get_parity_history(self) -> list[dict[str, Any]]:
+    async def get_parity_history(self) -> list[ParityHistoryEntry]:
         """Get parity check history."""
         result = await self.query(QUERY_PARITY_HISTORY)
-        history = result.get("parityHistory", [])
-        return list(history) if isinstance(history, list) else []
+        history = result.get("parityHistory") or []
+        if not isinstance(history, list):
+            return []
+        return [ParityHistoryEntry.model_validate(entry) for entry in history]
 
-    async def list_disks(self) -> list[dict[str, Any]]:
+    async def list_disks(self) -> list[Disk]:
         """List all physical disks (system-wide)."""
         result = await self.query(QUERY_DISKS)
-        disks = result.get("disks", [])
-        return list(disks) if isinstance(disks, list) else []
+        disks = result.get("disks") or []
+        if not isinstance(disks, list):
+            return []
+        return [Disk.model_validate(disk) for disk in disks]
 
-    async def list_containers(self) -> list[dict[str, Any]]:
+    async def list_containers(self) -> list[DockerContainer]:
         """List all Docker containers."""
         result = await self.query(QUERY_DOCKER_CONTAINERS)
-        containers = result.get("dockerContainers", [])
-        return list(containers) if isinstance(containers, list) else []
+        containers = result.get("dockerContainers") or []
+        if not isinstance(containers, list):
+            return []
+        return [DockerContainer.model_validate(container) for container in containers]
 
-    async def list_docker_networks(self) -> list[dict[str, Any]]:
+    async def list_docker_networks(self) -> list[DockerNetwork]:
         """List Docker networks."""
         result = await self.query(QUERY_DOCKER_NETWORKS)
-        networks = result.get("dockerNetworks", [])
-        return list(networks) if isinstance(networks, list) else []
+        networks = result.get("dockerNetworks") or []
+        if not isinstance(networks, list):
+            return []
+        return [DockerNetwork.model_validate(network) for network in networks]
 
-    async def list_vms(self) -> dict[str, Any]:
+    async def list_vms(self) -> Vms:
         """List all virtual machines."""
         result = await self.query(QUERY_VMS)
-        return result.get("vms", {})  # type: ignore[no-any-return]
+        return Vms.model_validate(result.get("vms") or {})
 
-    async def list_shares(self) -> list[dict[str, Any]]:
+    async def list_shares(self) -> list[Share]:
         """List user shares."""
         result = await self.query(QUERY_SHARES)
-        shares = result.get("shares", [])
-        return list(shares) if isinstance(shares, list) else []
+        shares = result.get("shares") or []
+        if not isinstance(shares, list):
+            return []
+        return [Share.model_validate(share) for share in shares]
 
-    async def list_users(self) -> list[dict[str, Any]]:
+    async def list_users(self) -> list[User]:
         """List Unraid users."""
         result = await self.query(QUERY_USERS)
-        users = result.get("users", [])
-        return list(users) if isinstance(users, list) else []
+        users = result.get("users") or []
+        if not isinstance(users, list):
+            return []
+        return [User.model_validate(user) for user in users]
 
-    async def list_notifications(self) -> list[dict[str, Any]]:
+    async def list_notifications(self) -> list[Notification]:
         """List notifications."""
         result = await self.query(QUERY_NOTIFICATIONS)
-        notifications = result.get("notifications", [])
-        return list(notifications) if isinstance(notifications, list) else []
+        notifications = result.get("notifications") or []
+        if not isinstance(notifications, list):
+            return []
+        return [Notification.model_validate(notification) for notification in notifications]
 
     async def get_flash(self) -> dict[str, Any]:
         """Get Unraid USB flash drive metadata."""

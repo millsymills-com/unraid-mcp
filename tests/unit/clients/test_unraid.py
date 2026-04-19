@@ -26,29 +26,43 @@ def client():
 
 class TestGetInfo:
     @respx.mock
-    async def test_get_info_returns_info_object(self, client):
+    async def test_get_info_returns_system_info_model(self, client):
         info = {"os": {"platform": "linux"}, "cpu": {"cores": 8}}
         respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"info": info}}))
         result = await client.get_info()
-        assert result == info
+        assert result.os is not None
+        assert result.os.platform == "linux"
+        assert result.cpu is not None
+        assert result.cpu.cores == 8
 
 
 class TestGetArray:
     @respx.mock
-    async def test_get_array_returns_array_object(self, client):
+    async def test_get_array_returns_array_state_model(self, client):
         array = {"state": "STARTED", "disks": []}
         respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"array": array}}))
         result = await client.get_array()
-        assert result == array
+        assert result.state == "STARTED"
+        assert result.disks == []
+
+    @respx.mock
+    async def test_get_array_parses_camelcase_disk_fields(self, client):
+        array = {"state": "STARTED", "disks": [{"id": "d1", "numReads": 42, "fsSize": "1000"}]}
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"array": array}}))
+        result = await client.get_array()
+        assert result.disks is not None
+        assert result.disks[0].num_reads == 42
+        assert result.disks[0].fs_size == "1000"
 
 
 class TestListContainers:
     @respx.mock
-    async def test_list_containers_returns_list(self, client):
+    async def test_list_containers_returns_list_of_models(self, client):
         containers = [{"id": "abc", "names": ["/plex"]}, {"id": "def", "names": ["/sonarr"]}]
         respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"dockerContainers": containers}}))
         result = await client.list_containers()
-        assert result == containers
+        assert [c.id for c in result] == ["abc", "def"]
+        assert result[0].names == ["/plex"]
 
     @respx.mock
     async def test_list_containers_returns_empty_list_on_missing_field(self, client):
@@ -59,11 +73,14 @@ class TestListContainers:
 
 class TestListVms:
     @respx.mock
-    async def test_list_vms_returns_vms_object(self, client):
+    async def test_list_vms_returns_vms_model(self, client):
         vms = {"domain": [{"uuid": "u1", "name": "win11", "state": "RUNNING"}]}
         respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"vms": vms}}))
         result = await client.list_vms()
-        assert result == vms
+        assert result.domain is not None
+        assert result.domain[0].uuid == "u1"
+        assert result.domain[0].name == "win11"
+        assert result.domain[0].state == "RUNNING"
 
 
 class TestStartArray:

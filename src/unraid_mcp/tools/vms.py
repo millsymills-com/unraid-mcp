@@ -7,6 +7,7 @@ from typing import Any
 from fastmcp import Context, FastMCP
 
 from unraid_mcp.errors import handle_client_error
+from unraid_mcp.models.vms import Vms
 from unraid_mcp.tools._helpers import require_client, require_readwrite
 
 
@@ -14,7 +15,7 @@ def register_vm_tools(mcp: FastMCP) -> None:
     """Register VM tools."""
 
     @mcp.tool(tags={"vms"})
-    async def unraid_list_vms(ctx: Context) -> dict[str, Any]:
+    async def unraid_list_vms(ctx: Context) -> Vms:
         """List all libvirt VMs (UUID, name, state)."""
         try:
             client = require_client(ctx)

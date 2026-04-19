@@ -7,6 +7,7 @@ from typing import Any
 from fastmcp import Context, FastMCP
 
 from unraid_mcp.errors import handle_client_error
+from unraid_mcp.models.notifications import Notification
 from unraid_mcp.tools._helpers import require_client, require_readwrite
 
 
@@ -14,7 +15,7 @@ def register_notification_tools(mcp: FastMCP) -> None:
     """Register notification tools."""
 
     @mcp.tool(tags={"notifications"})
-    async def unraid_list_notifications(ctx: Context) -> list[dict[str, Any]]:
+    async def unraid_list_notifications(ctx: Context) -> list[Notification]:
         """List active notifications (id, type, title, importance, timestamp)."""
         try:
             client = require_client(ctx)
