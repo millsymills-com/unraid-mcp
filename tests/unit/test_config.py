@@ -46,6 +46,10 @@ class TestApiEnabled:
         config = UnraidConfig(_env_file=None, unraid_api_key=None)
         assert config.api_enabled is False
 
+    def test_api_disabled_when_key_is_empty_string(self):
+        config = UnraidConfig(_env_file=None, unraid_api_key="")
+        assert config.api_enabled is False
+
 
 class TestUserMutationsFlag:
     def test_default_is_false(self):
