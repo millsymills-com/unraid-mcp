@@ -9,7 +9,7 @@ from pydantic import Field
 
 from unraid_mcp.errors import handle_client_error
 from unraid_mcp.models.users import User
-from unraid_mcp.tools._helpers import require_client, require_readwrite
+from unraid_mcp.tools._helpers import require_client, require_user_mutation
 
 
 def register_user_tools(mcp: FastMCP) -> None:
@@ -24,7 +24,10 @@ def register_user_tools(mcp: FastMCP) -> None:
         except Exception as e:
             handle_client_error(e)
 
-    @mcp.tool(tags={"write", "users"}, annotations={"readOnlyHint": False, "destructiveHint": False})
+    @mcp.tool(
+        tags={"write", "users", "user-mutation"},
+        annotations={"readOnlyHint": False, "destructiveHint": False},
+    )
     async def unraid_create_user(
         ctx: Context,
         name: str,
@@ -52,12 +55,15 @@ def register_user_tools(mcp: FastMCP) -> None:
             description: Optional description shown in the WebGUI.
         """
         try:
-            client = require_readwrite(ctx, "create user")
+            client = require_user_mutation(ctx, "create user")
             return await client.create_user(name=name, password=password, description=description)
         except Exception as e:
             handle_client_error(e)
 
-    @mcp.tool(tags={"write", "users"}, annotations={"readOnlyHint": False, "destructiveHint": True})
+    @mcp.tool(
+        tags={"write", "users", "user-mutation"},
+        annotations={"readOnlyHint": False, "destructiveHint": True},
+    )
     async def unraid_delete_user(ctx: Context, name: str) -> dict[str, Any]:
         """Delete an Unraid user by name.
 
@@ -65,7 +71,7 @@ def register_user_tools(mcp: FastMCP) -> None:
             name: Username to delete.
         """
         try:
-            client = require_readwrite(ctx, "delete user")
+            client = require_user_mutation(ctx, "delete user")
             return await client.delete_user(name)
         except Exception as e:
             handle_client_error(e)

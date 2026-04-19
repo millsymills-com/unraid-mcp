@@ -17,8 +17,8 @@ class TestListUsers:
 
 
 class TestCreateUser:
-    async def test_forwards_args(self, client_rw):
-        client, mock = client_rw
+    async def test_forwards_args(self, client_rw_user_mutations):
+        client, mock = client_rw_user_mutations
         mock.create_user.return_value = {"addUser": {"id": "u1", "name": "alice"}}
         await client.call_tool(
             "unraid_create_user",
@@ -26,8 +26,8 @@ class TestCreateUser:
         )
         mock.create_user.assert_awaited_once_with(name="alice", password="hunter2", description="Admin")
 
-    async def test_omits_description_when_missing(self, client_rw):
-        client, mock = client_rw
+    async def test_omits_description_when_missing(self, client_rw_user_mutations):
+        client, mock = client_rw_user_mutations
         mock.create_user.return_value = {"addUser": {"id": "u1", "name": "bob"}}
         await client.call_tool("unraid_create_user", {"name": "bob", "password": "hunter2"})
         mock.create_user.assert_awaited_once_with(name="bob", password="hunter2", description=None)
@@ -40,10 +40,24 @@ class TestCreateUser:
                 {"name": "x", "password": "y"},
             )
 
+    async def test_hidden_in_rw_without_user_mutations_flag(self, client_rw):
+        """Default `client_rw` has UNRAID_ALLOW_USER_MUTATIONS=false → tool must stay hidden."""
+        client, _ = client_rw
+        with pytest.raises(ToolError, match="Unknown tool"):
+            await client.call_tool(
+                "unraid_create_user",
+                {"name": "x", "password": "y"},
+            )
+
 
 class TestDeleteUser:
-    async def test_forwards_name(self, client_rw):
-        client, mock = client_rw
+    async def test_forwards_name(self, client_rw_user_mutations):
+        client, mock = client_rw_user_mutations
         mock.delete_user.return_value = {"deleteUser": {"name": "bob"}}
         await client.call_tool("unraid_delete_user", {"name": "bob"})
         mock.delete_user.assert_awaited_once_with("bob")
+
+    async def test_hidden_in_rw_without_user_mutations_flag(self, client_rw):
+        client, _ = client_rw
+        with pytest.raises(ToolError, match="Unknown tool"):
+            await client.call_tool("unraid_delete_user", {"name": "bob"})
