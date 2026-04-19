@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+import re
+import time
 from typing import Any
 
 import httpx
@@ -20,6 +23,12 @@ from unraid_mcp.errors import (
     UnraidNotFoundError,
     UnraidRateLimitError,
 )
+
+logger = logging.getLogger(__name__)
+
+# Match `query Foo { ... }`, `mutation Bar { ... }`, etc. so we can log a
+# meaningful operation name even when callers don't set `operationName`.
+_OPERATION_NAME_RE = re.compile(r"^\s*(?:query|mutation|subscription)\s+(\w+)")
 
 
 class BaseGraphQLClient:
@@ -115,6 +124,19 @@ class BaseGraphQLClient:
             raise UnraidNotFoundError(joined)
         raise UnraidGraphQLError(joined)
 
+    @staticmethod
+    def _operation_name(payload: dict[str, Any]) -> str:
+        """Best-effort extraction of the GraphQL operation name for log lines."""
+        explicit = payload.get("operationName")
+        if isinstance(explicit, str) and explicit:
+            return explicit
+        document = payload.get("query")
+        if isinstance(document, str):
+            match = _OPERATION_NAME_RE.match(document)
+            if match:
+                return match.group(1)
+        return "<anonymous>"
+
     async def _post(self, payload: dict[str, Any]) -> dict[str, Any]:
         """POST a JSON body to the GraphQL endpoint with retry on transient errors."""
 
@@ -127,10 +149,18 @@ class BaseGraphQLClient:
         async def _do() -> httpx.Response:
             return await self._client.post(self._graphql_url, json=payload)
 
+        operation = self._operation_name(payload)
+        start = time.perf_counter()
         try:
             response = await _do()
         except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            logger.warning("graphql %s failed after %.0fms: %s", operation, elapsed_ms, exc)
             raise UnraidConnectionError(str(exc)) from exc
+
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        log_level = logging.WARNING if response.status_code >= 400 else logging.INFO
+        logger.log(log_level, "graphql %s -> HTTP %d in %.0fms", operation, response.status_code, elapsed_ms)
 
         self._raise_for_status(response)
         body = self._parse_json(response)

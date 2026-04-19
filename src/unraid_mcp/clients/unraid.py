@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 import httpx
@@ -453,6 +454,7 @@ class UnraidClient(BaseGraphQLClient):
             UnraidError: subclass thereof when the API is unreachable,
                 unauthenticated, or returned a GraphQL error.
         """
+        start = time.perf_counter()
         try:
             response = await self._client.post(
                 self._graphql_url,
@@ -460,7 +462,11 @@ class UnraidClient(BaseGraphQLClient):
                 timeout=httpx.Timeout(_VALIDATION_TIMEOUT_SECONDS),
             )
         except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            logger.warning("graphql validate_connection failed after %.0fms: %s", elapsed_ms, exc)
             raise UnraidConnectionError(str(exc)) from exc
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.info("graphql validate_connection -> HTTP %d in %.0fms", response.status_code, elapsed_ms)
         self._raise_for_status(response)
         body = self._parse_json(response)
         self._check_graphql_errors(body)
