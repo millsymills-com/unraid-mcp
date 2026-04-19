@@ -1,7 +1,10 @@
 """Tests for server creation and mode gating."""
 
+from unittest.mock import AsyncMock, patch
+
 from unraid_mcp.config import UnraidConfig, UnraidMode
-from unraid_mcp.server import create_server
+from unraid_mcp.errors import UnraidConnectionError
+from unraid_mcp.server import ServerContext, create_server, server_lifespan
 
 
 def _make_config(**overrides):
@@ -70,3 +73,38 @@ class TestModeGating:
         rw_tools = await create_server(config_rw).list_tools()
 
         assert len(ro_tools) < len(rw_tools)
+
+
+class TestLifespanValidation:
+    """Lifespan must not publish a client whose validation failed."""
+
+    async def test_context_client_is_none_when_validation_fails(self, monkeypatch):
+        monkeypatch.setenv("UNRAID_API_KEY", "test-key")
+        mock_client = AsyncMock()
+        mock_client.validate_connection.side_effect = UnraidConnectionError("refused")
+
+        with patch("unraid_mcp.clients.unraid.UnraidClient", return_value=mock_client):
+            server = create_server()
+            async with server_lifespan(server) as context:
+                assert isinstance(context, ServerContext)
+                assert context.client is None
+
+        mock_client.close.assert_awaited_once()
+
+    async def test_context_client_is_set_when_validation_succeeds(self, monkeypatch):
+        monkeypatch.setenv("UNRAID_API_KEY", "test-key")
+        mock_client = AsyncMock()
+        mock_client.validate_connection.return_value = None
+
+        with patch("unraid_mcp.clients.unraid.UnraidClient", return_value=mock_client):
+            server = create_server()
+            async with server_lifespan(server) as context:
+                assert context.client is mock_client
+
+        mock_client.close.assert_awaited_once()
+
+    async def test_context_client_is_none_when_api_key_missing(self, monkeypatch):
+        monkeypatch.delenv("UNRAID_API_KEY", raising=False)
+        server = create_server()
+        async with server_lifespan(server) as context:
+            assert context.client is None

@@ -162,10 +162,11 @@ class BaseGraphQLClient:
 
     # ── Lifecycle ───────────────────────────────────────────────────────
 
-    async def validate_connection(self) -> bool:
+    async def validate_connection(self) -> None:
         """Validate that the API is reachable and authenticated.
 
-        Subclasses should override with a lightweight health-check query.
+        Subclasses should override with a lightweight health-check query and
+        let typed ``UnraidError`` subclasses propagate on failure.
         """
         raise NotImplementedError
 
