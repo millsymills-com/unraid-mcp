@@ -50,6 +50,62 @@ class TestCreateUser:
             )
 
 
+class TestCreateUserPasswordEnvVar:
+    async def test_resolves_from_env_var(self, client_rw_user_mutations, monkeypatch):
+        client, mock = client_rw_user_mutations
+        monkeypatch.setenv("UNRAID_NEW_USER_ALICE_PASSWORD", "secret-from-env")
+        mock.create_user.return_value = {"addUser": {"id": "u1", "name": "alice"}}
+        await client.call_tool(
+            "unraid_create_user",
+            {"name": "alice", "password_env_var": "UNRAID_NEW_USER_ALICE_PASSWORD"},
+        )
+        mock.create_user.assert_awaited_once_with(
+            name="alice",
+            password="secret-from-env",
+            description=None,
+        )
+
+    async def test_rejects_both_password_and_env_var(self, client_rw_user_mutations):
+        client, _ = client_rw_user_mutations
+        with pytest.raises(ToolError, match="exactly one of"):
+            await client.call_tool(
+                "unraid_create_user",
+                {"name": "x", "password": "p", "password_env_var": "UNRAID_NEW_USER_X"},
+            )
+
+    async def test_rejects_neither_password_nor_env_var(self, client_rw_user_mutations):
+        client, _ = client_rw_user_mutations
+        with pytest.raises(ToolError, match="exactly one of"):
+            await client.call_tool("unraid_create_user", {"name": "x"})
+
+    async def test_rejects_env_var_outside_prefix(self, client_rw_user_mutations, monkeypatch):
+        client, _ = client_rw_user_mutations
+        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "should-not-be-readable")
+        with pytest.raises(ToolError, match="must start with 'UNRAID_NEW_USER_'"):
+            await client.call_tool(
+                "unraid_create_user",
+                {"name": "x", "password_env_var": "AWS_SECRET_ACCESS_KEY"},
+            )
+
+    async def test_rejects_unset_env_var(self, client_rw_user_mutations, monkeypatch):
+        client, _ = client_rw_user_mutations
+        monkeypatch.delenv("UNRAID_NEW_USER_MISSING", raising=False)
+        with pytest.raises(ToolError, match="unset or empty"):
+            await client.call_tool(
+                "unraid_create_user",
+                {"name": "x", "password_env_var": "UNRAID_NEW_USER_MISSING"},
+            )
+
+    async def test_rejects_empty_env_var(self, client_rw_user_mutations, monkeypatch):
+        client, _ = client_rw_user_mutations
+        monkeypatch.setenv("UNRAID_NEW_USER_EMPTY", "")
+        with pytest.raises(ToolError, match="unset or empty"):
+            await client.call_tool(
+                "unraid_create_user",
+                {"name": "x", "password_env_var": "UNRAID_NEW_USER_EMPTY"},
+            )
+
+
 class TestDeleteUser:
     async def test_forwards_name(self, client_rw_user_mutations):
         client, mock = client_rw_user_mutations
