@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 from unraid_mcp.config import UnraidConfig, UnraidMode
 from unraid_mcp.errors import UnraidConnectionError
-from unraid_mcp.server import ServerContext, create_server, server_lifespan
+from unraid_mcp.server import ServerContext, create_server, make_server_lifespan
 
 
 def _make_config(**overrides):
@@ -78,36 +78,46 @@ class TestModeGating:
 class TestLifespanValidation:
     """Lifespan must not publish a client whose validation failed."""
 
-    async def test_context_client_is_none_when_validation_fails(self, monkeypatch):
-        monkeypatch.setenv("UNRAID_API_KEY", "test-key")
+    async def test_context_client_is_none_when_validation_fails(self):
+        config = _make_config()
         mock_client = AsyncMock()
         mock_client.validate_connection.side_effect = UnraidConnectionError("refused")
 
         with patch("unraid_mcp.clients.unraid.UnraidClient", return_value=mock_client):
-            server = create_server()
-            async with server_lifespan(server) as context:
+            server = create_server(config)
+            async with make_server_lifespan(config)(server) as context:
                 assert isinstance(context, ServerContext)
                 assert context.client is None
 
         mock_client.close.assert_awaited_once()
 
-    async def test_context_client_is_set_when_validation_succeeds(self, monkeypatch):
-        monkeypatch.setenv("UNRAID_API_KEY", "test-key")
+    async def test_context_client_is_set_when_validation_succeeds(self):
+        config = _make_config()
         mock_client = AsyncMock()
         mock_client.validate_connection.return_value = None
 
         with patch("unraid_mcp.clients.unraid.UnraidClient", return_value=mock_client):
-            server = create_server()
-            async with server_lifespan(server) as context:
+            server = create_server(config)
+            async with make_server_lifespan(config)(server) as context:
                 assert context.client is mock_client
 
         mock_client.close.assert_awaited_once()
 
-    async def test_context_client_is_none_when_api_key_missing(self, monkeypatch):
-        monkeypatch.delenv("UNRAID_API_KEY", raising=False)
-        server = create_server()
-        async with server_lifespan(server) as context:
+    async def test_context_client_is_none_when_api_key_missing(self):
+        config = _make_config(unraid_api_key=None)
+        server = create_server(config)
+        async with make_server_lifespan(config)(server) as context:
             assert context.client is None
+
+    async def test_lifespan_uses_explicit_config_over_env(self, monkeypatch):
+        # Regression test for #21: the config passed to create_server must
+        # be the one the lifespan uses, overriding any env vars.
+        monkeypatch.setenv("UNRAID_API_KEY", "env-key-should-be-ignored")
+        config = _make_config(unraid_api_key=None)  # explicit: no API key
+        server = create_server(config)
+        async with make_server_lifespan(config)(server) as context:
+            assert context.client is None
+            assert context.config.unraid_api_key is None
 
 
 class TestCreateUserSchema:
@@ -126,38 +136,29 @@ class TestCreateUserSchema:
 class TestTlsWarning:
     """Emit a warning when HTTPS is used without TLS verification."""
 
-    async def test_warns_when_https_and_verify_disabled(self, monkeypatch, caplog):
-        monkeypatch.delenv("UNRAID_API_KEY", raising=False)
-        monkeypatch.setenv("UNRAID_USE_HTTPS", "true")
-        monkeypatch.setenv("UNRAID_VERIFY_SSL", "false")
-
-        server = create_server()
+    async def test_warns_when_https_and_verify_disabled(self, caplog):
+        config = _make_config(unraid_api_key=None, unraid_use_https=True, unraid_verify_ssl=False)
+        server = create_server(config)
         with caplog.at_level("WARNING", logger="unraid_mcp.server"):
-            async with server_lifespan(server):
+            async with make_server_lifespan(config)(server):
                 pass
 
         assert any("TLS verification is DISABLED" in rec.message for rec in caplog.records)
 
-    async def test_no_warning_when_https_and_verify_enabled(self, monkeypatch, caplog):
-        monkeypatch.delenv("UNRAID_API_KEY", raising=False)
-        monkeypatch.setenv("UNRAID_USE_HTTPS", "true")
-        monkeypatch.setenv("UNRAID_VERIFY_SSL", "true")
-
-        server = create_server()
+    async def test_no_warning_when_https_and_verify_enabled(self, caplog):
+        config = _make_config(unraid_api_key=None, unraid_use_https=True, unraid_verify_ssl=True)
+        server = create_server(config)
         with caplog.at_level("WARNING", logger="unraid_mcp.server"):
-            async with server_lifespan(server):
+            async with make_server_lifespan(config)(server):
                 pass
 
         assert not any("TLS verification is DISABLED" in rec.message for rec in caplog.records)
 
-    async def test_no_warning_when_http_plain(self, monkeypatch, caplog):
-        monkeypatch.delenv("UNRAID_API_KEY", raising=False)
-        monkeypatch.setenv("UNRAID_USE_HTTPS", "false")
-        monkeypatch.setenv("UNRAID_VERIFY_SSL", "false")
-
-        server = create_server()
+    async def test_no_warning_when_http_plain(self, caplog):
+        config = _make_config(unraid_api_key=None, unraid_use_https=False, unraid_verify_ssl=False)
+        server = create_server(config)
         with caplog.at_level("WARNING", logger="unraid_mcp.server"):
-            async with server_lifespan(server):
+            async with make_server_lifespan(config)(server):
                 pass
 
         assert not any("TLS verification is DISABLED" in rec.message for rec in caplog.records)
