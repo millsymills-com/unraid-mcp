@@ -105,6 +105,62 @@ class TestErrorMapping:
             await client.query("query { foo }")
 
     @respx.mock
+    async def test_graphql_unauthenticated_code_raises_auth_error(self, client):
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "errors": [{"message": "Missing API key", "extensions": {"code": "UNAUTHENTICATED"}}],
+                    "data": None,
+                },
+            )
+        )
+        with pytest.raises(UnraidAuthError, match="Missing API key"):
+            await client.query("query { x }")
+
+    @respx.mock
+    async def test_graphql_forbidden_code_raises_auth_error(self, client):
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "errors": [{"message": "Role insufficient", "extensions": {"code": "FORBIDDEN"}}],
+                    "data": None,
+                },
+            )
+        )
+        with pytest.raises(UnraidAuthError, match="Role insufficient"):
+            await client.query("query { x }")
+
+    @respx.mock
+    async def test_graphql_not_found_code_raises_not_found_error(self, client):
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "errors": [{"message": "Container abc not found", "extensions": {"code": "NOT_FOUND"}}],
+                    "data": None,
+                },
+            )
+        )
+        with pytest.raises(UnraidNotFoundError, match="Container abc not found"):
+            await client.query("query { x }")
+
+    @respx.mock
+    async def test_graphql_unknown_code_falls_back_to_graphql_error(self, client):
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "errors": [{"message": "Internal boom", "extensions": {"code": "INTERNAL_SERVER_ERROR"}}],
+                    "data": None,
+                },
+            )
+        )
+        with pytest.raises(UnraidGraphQLError, match="Internal boom"):
+            await client.query("query { x }")
+
+    @respx.mock
     async def test_missing_data_field_raises_unraid_error(self, client):
         respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={}))
         with pytest.raises(UnraidError, match="missing 'data' field"):

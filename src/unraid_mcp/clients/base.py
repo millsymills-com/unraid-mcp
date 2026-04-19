@@ -85,16 +85,35 @@ class BaseGraphQLClient:
         return payload
 
     def _check_graphql_errors(self, payload: dict[str, Any]) -> None:
-        """Raise ``UnraidGraphQLError`` if the response contains an ``errors`` array."""
+        """Raise a typed exception if the response contains an ``errors`` array.
+
+        Routes via ``extensions.code`` on the first error when present:
+        ``UNAUTHENTICATED``/``FORBIDDEN`` → :class:`UnraidAuthError`,
+        ``NOT_FOUND`` → :class:`UnraidNotFoundError`. Otherwise falls back
+        to :class:`UnraidGraphQLError` with concatenated messages.
+        """
         errors = payload.get("errors")
         if not errors:
             return
-        # Concatenate all error messages, preserving any extension hints.
         messages = []
+        code: str | None = None
         for err in errors:
-            msg = err.get("message", "unknown error") if isinstance(err, dict) else str(err)
-            messages.append(msg)
-        raise UnraidGraphQLError("; ".join(messages))
+            if isinstance(err, dict):
+                messages.append(err.get("message", "unknown error"))
+                if code is None:
+                    extensions = err.get("extensions") or {}
+                    if isinstance(extensions, dict):
+                        ext_code = extensions.get("code")
+                        if isinstance(ext_code, str):
+                            code = ext_code
+            else:
+                messages.append(str(err))
+        joined = "; ".join(messages)
+        if code in {"UNAUTHENTICATED", "FORBIDDEN"}:
+            raise UnraidAuthError(joined)
+        if code == "NOT_FOUND":
+            raise UnraidNotFoundError(joined)
+        raise UnraidGraphQLError(joined)
 
     async def _post(self, payload: dict[str, Any]) -> dict[str, Any]:
         """POST a JSON body to the GraphQL endpoint with retry on transient errors."""
