@@ -175,7 +175,7 @@ branch = true
 omit = ["tests/*", "src/unraid_mcp/__main__.py"]
 
 [tool.coverage.report]
-fail_under = 40
+fail_under = 80
 show_missing = true
 skip_covered = true
 exclude_lines = [
