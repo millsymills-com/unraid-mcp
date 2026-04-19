@@ -51,8 +51,8 @@ class UnraidConfig(BaseSettings):
 
     @property
     def api_enabled(self) -> bool:
-        """Whether the Unraid API is configured (host + key set)."""
-        return self.unraid_api_key is not None
+        """Whether the Unraid API is configured (host + non-empty key set)."""
+        return bool(self.unraid_api_key)
 
     @property
     def base_url(self) -> str:
