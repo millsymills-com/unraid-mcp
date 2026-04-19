@@ -1,6 +1,7 @@
 """Tests for Unraid MCP configuration and error mapping."""
 
 import pytest
+from fastmcp.exceptions import ToolError
 from pydantic import ValidationError
 
 from unraid_mcp.config import UnraidConfig, UnraidMode
@@ -144,3 +145,10 @@ class TestHandleClientError:
     def test_unexpected_error_mapping(self):
         with pytest.raises(Exception, match="Unexpected error"):
             handle_client_error(RuntimeError("Boom"))
+
+    def test_tool_error_passthrough_not_rewrapped(self):
+        original = ToolError("direct tool-authored message")
+        with pytest.raises(ToolError) as exc_info:
+            handle_client_error(original)
+        assert exc_info.value is original
+        assert "Unexpected error" not in str(exc_info.value)
