@@ -58,16 +58,17 @@ src/unraid_mcp/
 │   ├── shares.py        # User and disk shares
 │   ├── users.py         # Unraid users
 │   └── notifications.py # Notifications
-└── tools/               # MCP tool definitions
-    ├── system/          # info, sysinfo, uptime
-    ├── array/           # state, start/stop array
-    ├── disks/           # list, smart, spin up/down
-    ├── docker/          # containers, networks
-    ├── vms/             # list, start/stop/pause
-    ├── shares/          # user + disk shares
-    ├── users/           # list/create/delete
-    ├── notifications/   # list/archive/delete
-    └── parity/          # status/start/pause/cancel
+└── tools/               # MCP tool definitions (flat — one module per domain)
+    ├── _helpers.py      # shared context/client guards
+    ├── system.py        # info / flash / registration / connect
+    ├── array.py         # get_array, start/stop array
+    ├── parity.py        # parity history + start/pause/resume/cancel
+    ├── disks.py         # list / get disk
+    ├── docker.py        # containers + networks, start/stop/restart/pause/unpause
+    ├── vms.py           # list / start / stop / force_stop / pause / resume / reboot
+    ├── shares.py        # list / get share
+    ├── users.py         # list / create / delete
+    └── notifications.py # list / archive / delete / archive_all
 ```
 
 ## Conventions
