@@ -5,7 +5,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import httpx
+
 from unraid_mcp.clients.base import BaseGraphQLClient
+from unraid_mcp.errors import UnraidConnectionError
 from unraid_mcp.models.array import ArrayState, ParityHistoryEntry
 from unraid_mcp.models.disks import Disk
 from unraid_mcp.models.docker import DockerContainer, DockerNetwork
@@ -16,6 +19,9 @@ from unraid_mcp.models.users import User
 from unraid_mcp.models.vms import Vms
 
 logger = logging.getLogger(__name__)
+
+# Validation goes around the retry loop to fail fast on first-run typos.
+_VALIDATION_TIMEOUT_SECONDS = 5
 
 
 # ── Queries ─────────────────────────────────────────────────────────────
@@ -436,10 +442,25 @@ class UnraidClient(BaseGraphQLClient):
     # ── Lifecycle ───────────────────────────────────────────────────────
 
     async def validate_connection(self) -> None:
-        """Validate connectivity by fetching basic system info.
+        """Validate connectivity by issuing a single short-timeout query.
+
+        Bypasses the retry loop in :meth:`BaseGraphQLClient._post` so a
+        misconfigured host fails in a few seconds instead of blocking
+        startup for ``UNRAID_MAX_RETRIES * UNRAID_REQUEST_TIMEOUT`` seconds
+        worst case (~90s by default).
 
         Raises:
             UnraidError: subclass thereof when the API is unreachable,
                 unauthenticated, or returned a GraphQL error.
         """
-        await self.get_info()
+        try:
+            response = await self._client.post(
+                self._graphql_url,
+                json={"query": QUERY_INFO},
+                timeout=httpx.Timeout(_VALIDATION_TIMEOUT_SECONDS),
+            )
+        except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            raise UnraidConnectionError(str(exc)) from exc
+        self._raise_for_status(response)
+        body = self._parse_json(response)
+        self._check_graphql_errors(body)

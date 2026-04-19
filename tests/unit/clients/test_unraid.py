@@ -178,3 +178,12 @@ class TestValidateConnection:
         respx.post(GRAPHQL_URL).mock(side_effect=httpx.ConnectError("refused"))
         with pytest.raises(UnraidConnectionError, match="refused"):
             await client.validate_connection()
+
+    @respx.mock
+    async def test_validate_does_not_retry(self, client):
+        # Regression for #34: validate_connection must fail fast without
+        # the multi-attempt retry loop used by `_post`.
+        route = respx.post(GRAPHQL_URL).mock(side_effect=httpx.ConnectError("refused"))
+        with pytest.raises(UnraidConnectionError):
+            await client.validate_connection()
+        assert route.call_count == 1
