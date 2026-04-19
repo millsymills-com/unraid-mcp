@@ -47,6 +47,7 @@ See [.env.example](.env.example) for all configuration options.
 | `UNRAID_API_KEY` | — | API key from Unraid WebGUI |
 | `UNRAID_VERIFY_SSL` | `false` | Verify TLS cert (false for self-signed) |
 | `UNRAID_ALLOW_USER_MUTATIONS` | `false` | Secondary switch for `unraid_create_user` / `unraid_delete_user`; even in `readwrite` mode these stay hidden unless this is `true` |
+| `UNRAID_NEW_USER_*` | — | When set, can be referenced via `password_env_var` on `unraid_create_user` so the password stays out of MCP transcripts. Name must start with `UNRAID_NEW_USER_`. |
 
 ## Development
 
