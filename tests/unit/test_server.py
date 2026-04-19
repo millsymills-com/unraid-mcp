@@ -108,3 +108,43 @@ class TestLifespanValidation:
         server = create_server()
         async with server_lifespan(server) as context:
             assert context.client is None
+
+
+class TestTlsWarning:
+    """Emit a warning when HTTPS is used without TLS verification."""
+
+    async def test_warns_when_https_and_verify_disabled(self, monkeypatch, caplog):
+        monkeypatch.delenv("UNRAID_API_KEY", raising=False)
+        monkeypatch.setenv("UNRAID_USE_HTTPS", "true")
+        monkeypatch.setenv("UNRAID_VERIFY_SSL", "false")
+
+        server = create_server()
+        with caplog.at_level("WARNING", logger="unraid_mcp.server"):
+            async with server_lifespan(server):
+                pass
+
+        assert any("TLS verification is DISABLED" in rec.message for rec in caplog.records)
+
+    async def test_no_warning_when_https_and_verify_enabled(self, monkeypatch, caplog):
+        monkeypatch.delenv("UNRAID_API_KEY", raising=False)
+        monkeypatch.setenv("UNRAID_USE_HTTPS", "true")
+        monkeypatch.setenv("UNRAID_VERIFY_SSL", "true")
+
+        server = create_server()
+        with caplog.at_level("WARNING", logger="unraid_mcp.server"):
+            async with server_lifespan(server):
+                pass
+
+        assert not any("TLS verification is DISABLED" in rec.message for rec in caplog.records)
+
+    async def test_no_warning_when_http_plain(self, monkeypatch, caplog):
+        monkeypatch.delenv("UNRAID_API_KEY", raising=False)
+        monkeypatch.setenv("UNRAID_USE_HTTPS", "false")
+        monkeypatch.setenv("UNRAID_VERIFY_SSL", "false")
+
+        server = create_server()
+        with caplog.at_level("WARNING", logger="unraid_mcp.server"):
+            async with server_lifespan(server):
+                pass
+
+        assert not any("TLS verification is DISABLED" in rec.message for rec in caplog.records)

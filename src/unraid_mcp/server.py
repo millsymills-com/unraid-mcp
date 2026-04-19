@@ -34,6 +34,13 @@ async def server_lifespan(_server: FastMCP) -> AsyncIterator[ServerContext]:
     # Lazily import the client to avoid circular deps at module load time
     from unraid_mcp.clients.unraid import UnraidClient
 
+    if config.unraid_use_https and not config.unraid_verify_ssl:
+        logger.warning(
+            "TLS verification is DISABLED for %s — acceptable for self-signed LAN certs, "
+            "but unsafe on untrusted networks. Set UNRAID_VERIFY_SSL=true when possible.",
+            config.base_url,
+        )
+
     if config.api_enabled:
         client = UnraidClient(
             graphql_url=config.graphql_url,
