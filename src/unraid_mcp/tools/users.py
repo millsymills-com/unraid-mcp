@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from fastmcp import Context, FastMCP
+from pydantic import Field
 
 from unraid_mcp.errors import handle_client_error
 from unraid_mcp.tools._helpers import require_client, require_readwrite
@@ -26,14 +27,27 @@ def register_user_tools(mcp: FastMCP) -> None:
     async def unraid_create_user(
         ctx: Context,
         name: str,
-        password: str,
+        password: Annotated[
+            str,
+            Field(
+                description="Initial password — will be transmitted over the GraphQL connection.",
+                json_schema_extra={"format": "password", "writeOnly": True},
+            ),
+        ],
         description: str | None = None,
     ) -> dict[str, Any]:
         """Create a new Unraid user.
 
+        **Security note**: `password` is sent over the network in the GraphQL
+        request body and may appear in MCP transcripts and client logs. Prefer
+        issuing this tool from a trusted context and rotating the password via
+        the Unraid WebGUI after creation. Logging should not be set to DEBUG in
+        production — httpx will surface request bodies at that level.
+
         Args:
             name: Username (must be unique).
-            password: Initial password.
+            password: Initial password (JSON schema format=password so
+                capable clients can redact it in UI).
             description: Optional description shown in the WebGUI.
         """
         try:

@@ -110,6 +110,19 @@ class TestLifespanValidation:
             assert context.client is None
 
 
+class TestCreateUserSchema:
+    """`unraid_create_user`'s password parameter must advertise sensitive-data hints."""
+
+    async def test_password_field_has_password_format(self):
+        config = _make_config(unraid_mode=UnraidMode.READWRITE)
+        server = create_server(config)
+        tools = await server.list_tools()
+        tool = next(t for t in tools if t.name == "unraid_create_user")
+        password_schema = tool.parameters["properties"]["password"]
+        assert password_schema["format"] == "password"
+        assert password_schema["writeOnly"] is True
+
+
 class TestTlsWarning:
     """Emit a warning when HTTPS is used without TLS verification."""
 
