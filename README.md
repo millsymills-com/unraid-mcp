@@ -46,6 +46,7 @@ See [.env.example](.env.example) for all configuration options.
 | `UNRAID_USE_HTTPS` | `true` | Use HTTPS (set false for plain HTTP) |
 | `UNRAID_API_KEY` | — | API key from Unraid WebGUI |
 | `UNRAID_VERIFY_SSL` | `false` | Verify TLS cert (false for self-signed) |
+| `UNRAID_ALLOW_USER_MUTATIONS` | `false` | Secondary switch for `unraid_create_user` / `unraid_delete_user`; even in `readwrite` mode these stay hidden unless this is `true` |
 
 ## Development
 
