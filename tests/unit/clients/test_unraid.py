@@ -9,6 +9,7 @@ import pytest
 import respx
 
 from unraid_mcp.clients.unraid import UnraidClient
+from unraid_mcp.errors import UnraidConnectionError
 
 GRAPHQL_URL = "https://tower.local:443/graphql"
 
@@ -149,13 +150,14 @@ class TestDeleteUser:
 
 class TestValidateConnection:
     @respx.mock
-    async def test_validate_returns_true_on_success(self, client):
+    async def test_validate_returns_none_on_success(self, client):
         respx.post(GRAPHQL_URL).mock(
             return_value=httpx.Response(200, json={"data": {"info": {"os": {"platform": "linux"}}}})
         )
-        assert await client.validate_connection() is True
+        assert await client.validate_connection() is None
 
     @respx.mock
-    async def test_validate_returns_false_on_connection_error(self, client):
+    async def test_validate_raises_on_connection_error(self, client):
         respx.post(GRAPHQL_URL).mock(side_effect=httpx.ConnectError("refused"))
-        assert await client.validate_connection() is False
+        with pytest.raises(UnraidConnectionError, match="refused"):
+            await client.validate_connection()

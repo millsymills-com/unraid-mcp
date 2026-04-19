@@ -413,12 +413,11 @@ class UnraidClient(BaseGraphQLClient):
 
     # ── Lifecycle ───────────────────────────────────────────────────────
 
-    async def validate_connection(self) -> bool:
-        """Validate connectivity by fetching basic system info."""
-        try:
-            await self.get_info()
-        except Exception:
-            logger.debug("Unraid API connection validation failed", exc_info=True)
-            return False
-        else:
-            return True
+    async def validate_connection(self) -> None:
+        """Validate connectivity by fetching basic system info.
+
+        Raises:
+            UnraidError: subclass thereof when the API is unreachable,
+                unauthenticated, or returned a GraphQL error.
+        """
+        await self.get_info()

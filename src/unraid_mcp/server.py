@@ -35,19 +35,24 @@ async def server_lifespan(_server: FastMCP) -> AsyncIterator[ServerContext]:
     from unraid_mcp.clients.unraid import UnraidClient
 
     if config.api_enabled:
+        client = UnraidClient(
+            graphql_url=config.graphql_url,
+            api_key=config.unraid_api_key,  # type: ignore[arg-type]
+            verify_ssl=config.unraid_verify_ssl,
+            timeout=config.unraid_request_timeout,
+            max_retries=config.unraid_max_retries,
+        )
         try:
-            client = UnraidClient(
-                graphql_url=config.graphql_url,
-                api_key=config.unraid_api_key,  # type: ignore[arg-type]
-                verify_ssl=config.unraid_verify_ssl,
-                timeout=config.unraid_request_timeout,
-                max_retries=config.unraid_max_retries,
-            )
             await client.validate_connection()
-            context.client = client
-            logger.info("Unraid client initialized")
         except Exception:
-            logger.exception("Failed to connect to Unraid API — tools will return errors")
+            logger.exception(
+                "Failed to validate Unraid API at %s — tools will return errors",
+                config.graphql_url,
+            )
+            await client.close()
+        else:
+            context.client = client
+            logger.info("Unraid client initialized and validated")
     else:
         logger.warning("UNRAID_API_KEY not set — tools will return 'not configured' errors")
 
