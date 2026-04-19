@@ -214,3 +214,44 @@ class TestClose:
     async def test_close_calls_aclose(self, client):
         await client.close()
         assert client._client.is_closed
+
+
+class TestObservability:
+    """Per-request log lines (timing, status, operation name)."""
+
+    @respx.mock
+    async def test_logs_operation_and_timing_on_success(self, client, caplog):
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"info": {}}}))
+        with caplog.at_level("INFO", logger="unraid_mcp.clients.base"):
+            await client.query("query Info { info { os { platform } } }")
+        info_lines = [r for r in caplog.records if r.levelname == "INFO" and "graphql Info" in r.message]
+        assert info_lines, f"expected an 'graphql Info' INFO line, got: {[r.message for r in caplog.records]}"
+        assert "HTTP 200" in info_lines[0].message
+        assert "ms" in info_lines[0].message
+
+    @respx.mock
+    async def test_warns_on_http_error(self, client, caplog):
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(500, text="oops"))
+        with (
+            caplog.at_level("WARNING", logger="unraid_mcp.clients.base"),
+            pytest.raises(UnraidError),
+        ):
+            await client.query("query Info { x }")
+        warn_lines = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert warn_lines, "expected a WARNING for HTTP 500"
+        assert "HTTP 500" in warn_lines[0].message
+
+    @respx.mock
+    async def test_anonymous_query_logs_anonymous(self, client, caplog):
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"x": 1}}))
+        with caplog.at_level("INFO", logger="unraid_mcp.clients.base"):
+            await client.query("{ x }")
+        assert any("graphql <anonymous>" in r.message for r in caplog.records)
+
+    @respx.mock
+    async def test_explicit_operation_name_wins(self, client, caplog):
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"x": 1}}))
+        with caplog.at_level("INFO", logger="unraid_mcp.clients.base"):
+            await client.query("query InternalName { x }", operation_name="ExplicitName")
+        assert any("graphql ExplicitName" in r.message for r in caplog.records)
+        assert not any("graphql InternalName" in r.message for r in caplog.records)
