@@ -64,6 +64,7 @@ uv run bandit -r src/unraid_mcp/ -c pyproject.toml
 - Write commit messages in the Conventional Commits style (`feat:`, `fix:`, `docs:`, `deps:`, `chore:`, etc.).
 - Keep PRs small where possible. Large refactors are easier to review when split into sequenced commits.
 - Reference the relevant plan, issue, or requirement ID in the PR body when it applies.
+- Add a one-line entry under `[Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md) for any user-visible change (new tool, new env var, new error mapping, behavior change, security fix). Internal refactors that don't change behavior or surface area can be skipped.
 
 ## Releases
 
