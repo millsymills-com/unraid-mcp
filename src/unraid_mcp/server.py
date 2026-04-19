@@ -1,0 +1,93 @@
+"""FastMCP server creation, lifespan, and mode gating."""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+from fastmcp import FastMCP
+from fastmcp.server.lifespan import lifespan
+
+from unraid_mcp.config import UnraidConfig
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ServerContext:
+    """Lifespan context passed to all tools via ``ctx.lifespan_context``."""
+
+    config: UnraidConfig
+    client: object | None = None  # UnraidClient | None — typed loosely to avoid circular imports
+
+
+@lifespan  # type: ignore[arg-type]
+async def server_lifespan(_server: FastMCP) -> AsyncIterator[ServerContext]:
+    """Initialize the Unraid client (if configured), validate, and yield context."""
+    config = UnraidConfig()
+    context = ServerContext(config=config)
+
+    # Lazily import the client to avoid circular deps at module load time
+    from unraid_mcp.clients.unraid import UnraidClient
+
+    if config.api_enabled:
+        try:
+            client = UnraidClient(
+                graphql_url=config.graphql_url,
+                api_key=config.unraid_api_key,  # type: ignore[arg-type]
+                verify_ssl=config.unraid_verify_ssl,
+                timeout=config.unraid_request_timeout,
+                max_retries=config.unraid_max_retries,
+            )
+            await client.validate_connection()
+            context.client = client
+            logger.info("Unraid client initialized")
+        except Exception:
+            logger.exception("Failed to connect to Unraid API — tools will return errors")
+    else:
+        logger.warning("UNRAID_API_KEY not set — tools will return 'not configured' errors")
+
+    try:
+        yield context
+    finally:
+        if context.client is not None:
+            try:
+                await context.client.close()  # type: ignore[attr-defined]
+                logger.info("Closed Unraid client")
+            except Exception:
+                logger.exception("Error closing Unraid client")
+
+
+def create_server(config: UnraidConfig | None = None) -> FastMCP:
+    """Create and configure the FastMCP server."""
+    if config is None:
+        config = UnraidConfig()
+
+    server = FastMCP(
+        name="unraid-mcp",
+        instructions=(
+            "Unraid MCP server providing tools for the Unraid GraphQL API. "
+            "Use these tools to query system info, manage the array and parity, "
+            "control Docker containers and VMs, browse shares and users, and "
+            "review notifications."
+        ),
+        lifespan=server_lifespan,
+    )
+
+    # Register all tools
+    from unraid_mcp.tools import register_all_tools
+
+    register_all_tools(server)
+
+    # Apply mode gating — hide write tools in readonly mode
+    if not config.is_readwrite:
+        server.disable(tags={"write"})
+        logger.info("Read-only mode: write tools disabled")
+    else:
+        logger.info("Read-write mode: all tools enabled")
+
+    return server
