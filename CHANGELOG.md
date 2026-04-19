@@ -29,6 +29,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   not-found lookups, auth errors, and unconfigured-API surfaces (#11).
 - Integration test scaffolding in `tests/integration/test_live_server.py`
   with fast-skip behavior when `UNRAID_API_KEY` is not set (#23).
+- `UNRAID_ALLOW_USER_MUTATIONS` feature flag (default `false`). The
+  `unraid_create_user` and `unraid_delete_user` tools carry a new
+  `user-mutation` tag and stay hidden unless both `UNRAID_MODE=readwrite`
+  and this flag are set. Defense-in-depth via the new
+  `require_user_mutation` helper (#29).
+- `password_env_var` parameter on `unraid_create_user`, with a hardcoded
+  `UNRAID_NEW_USER_` allowlist prefix. Lets operators keep the cleartext
+  password out of MCP transcripts by reading it from a server-side env
+  var instead of passing it as a tool argument (#30).
 
 ### Changed
 - `validate_connection()` now propagates typed `UnraidError` subclasses
@@ -46,6 +55,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   than returning `{"error": "..."}` (#6).
 - `handle_client_error` now passes `ToolError` through unchanged instead of
   rewrapping it as `"Unexpected error: ..."` (#26).
+- `unraid_create_user` accepts `password` xor `password_env_var` (previously
+  `password` was required and positional). Existing inline-password callers
+  are unchanged; the default path is unchanged (#30).
 - Pre-commit hooks now run `ruff` and `mypy` via `uv run` (`language: system`)
   so pre-commit and CI share one toolchain, eliminating version drift
   between pinned hook revs and `pyproject.toml`'s dev extras (#10).
@@ -53,7 +65,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   structure instead of fictional per-domain subdirectories (#22).
 
 ### Coverage / quality
-- Tests: 66 → 131 passing.
+- Tests: 66 → 143 passing.
 - Coverage: 49% → 85% overall; `fail_under` raised from 40 to 80.
 - Tool-layer coverage: 29–48% → 66–93%.
 - Models: 0% used → 100% integrated.
