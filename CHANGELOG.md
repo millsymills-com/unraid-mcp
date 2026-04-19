@@ -1,0 +1,67 @@
+# Changelog
+
+All notable changes to `unraid-mcp` are documented here. The format is based on
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
+adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+- `py.typed` marker so consumers installing the wheel pick up the package's
+  type information (#9).
+- Startup warning when `UNRAID_USE_HTTPS=true` and `UNRAID_VERIFY_SSL=false`,
+  so operators deploying outside a trusted LAN see a visible signal (#12).
+- `format: password` / `writeOnly` hints on `unraid_create_user`'s `password`
+  parameter so capable MCP clients can redact the value in UI (#8).
+- Typed pydantic models now back every Unraid read endpoint. `UnraidClient`
+  validates responses via `SystemInfo`, `ArrayState`, `ParityHistoryEntry`,
+  `Disk`, `DockerContainer`, `DockerNetwork`, `Vms`, `Share`, `User`,
+  `Notification`; tools return those types so FastMCP emits richer schemas
+  (#6).
+- `UnraidBaseModel` uses `pydantic.alias_generators.to_camel` with
+  `populate_by_name=True`, so snake_case Python fields map to the Unraid
+  API's camelCase shape without per-field aliases (#6).
+- `make_server_lifespan(config)` factory so the lifespan is bound to the
+  caller's `UnraidConfig`; `create_server(config)` is now the single source
+  of truth for both mode gating and client construction (#21).
+- End-to-end tool-layer tests via `fastmcp.Client` in-memory session — 51 new
+  tests across all domains, covering happy path, readonly-mode invisibility,
+  not-found lookups, auth errors, and unconfigured-API surfaces (#11).
+- Integration test scaffolding in `tests/integration/test_live_server.py`
+  with fast-skip behavior when `UNRAID_API_KEY` is not set (#23).
+
+### Changed
+- `validate_connection()` now propagates typed `UnraidError` subclasses
+  instead of returning a bool. The lifespan catches the exception, logs
+  the real cause, closes the httpx client, and leaves `context.client =
+  None` so tools surface `UnraidNotConfiguredError` at call time rather
+  than round-tripping to a dead backend (#5).
+- GraphQL errors with `extensions.code` are now routed to typed exceptions:
+  `UNAUTHENTICATED` / `FORBIDDEN` → `UnraidAuthError`, `NOT_FOUND` →
+  `UnraidNotFoundError`, everything else falls back to `UnraidGraphQLError`
+  (#7).
+- Lookup tools (`unraid_get_container`, `unraid_get_disk`, `unraid_get_share`)
+  now raise `UnraidNotFoundError` on miss, surfacing through
+  `handle_client_error` as `ToolError("Resource not found: ...")` rather
+  than returning `{"error": "..."}` (#6).
+- `handle_client_error` now passes `ToolError` through unchanged instead of
+  rewrapping it as `"Unexpected error: ..."` (#26).
+- Pre-commit hooks now run `ruff` and `mypy` via `uv run` (`language: system`)
+  so pre-commit and CI share one toolchain, eliminating version drift
+  between pinned hook revs and `pyproject.toml`'s dev extras (#10).
+- `CLAUDE.md` tool layout diagram updated to match the flat `tools/*.py`
+  structure instead of fictional per-domain subdirectories (#22).
+
+### Coverage / quality
+- Tests: 66 → 131 passing.
+- Coverage: 49% → 85% overall; `fail_under` raised from 40 to 80.
+- Tool-layer coverage: 29–48% → 66–93%.
+- Models: 0% used → 100% integrated.
+
+## [0.1.0] — 2026-04-18
+
+Initial scaffold. Production-grade FastMCP server for the Unraid GraphQL API,
+with 38 tools across system, array, parity, disks, docker, VMs, shares,
+users, and notifications domains. Read/write mode separation, typed error
+hierarchy, strict mypy + broad ruff ruleset, 66 unit tests, Apache-2.0
+licensed.
