@@ -44,6 +44,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `payload.operationName` or is parsed from the GraphQL document
   (`query Foo { ... }` → `Foo`); anonymous documents log as
   `<anonymous>` (#37).
+- `unraid-mcp --check-config` flag. Prints the resolved configuration
+  (with the API key redacted), runs a single `validate_connection`,
+  and exits 0/1/2 for success / missing key / validation failure. Lets
+  operators verify their `.env` before attaching an MCP client. Also
+  adds `--version` via argparse (#41).
+- `unraid-mcp --version` CLI flag (#41).
+- `scripts/smoke_install.sh`. End-to-end wheel smoke: `uv build` →
+  install into a clean venv → exercise `--version`, `--help`, and
+  `--check-config`. Catches packaging/entry-point regressions that
+  `uv run pytest` against the source tree can't see (#42).
+- Per-domain integration smokes in `tests/integration/test_live_server.py`
+  (13 total, up from 2) — one read tool per domain with invariants
+  like `bridge` Docker network and `root` user. Opt-in via
+  `UNRAID_API_KEY` and the `integration` marker; default `pytest`
+  run still skips them all (#43).
 
 ### Changed
 - `validate_connection()` now propagates typed `UnraidError` subclasses
@@ -67,6 +82,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `validate_connection` now bypasses the `tenacity` retry loop and uses a
   5-second timeout, so a typo'd `UNRAID_HOST` fails in seconds instead of
   blocking startup for up to ~90s (#34).
+- `UnraidConfig.api_enabled` now treats empty-string `UNRAID_API_KEY` as
+  unconfigured (previously only `None` did). Prevents `UNRAID_API_KEY=`
+  in a shell from pretending the server was configured (#41).
 - Pre-commit hooks now run `ruff` and `mypy` via `uv run` (`language: system`)
   so pre-commit and CI share one toolchain, eliminating version drift
   between pinned hook revs and `pyproject.toml`'s dev extras (#10).
@@ -74,10 +92,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   structure instead of fictional per-domain subdirectories (#22).
 
 ### Coverage / quality
-- Tests: 66 → 148 passing.
+- Unit tests: 66 → 157 passing.
+- Integration smokes: 2 → 13 (opt-in).
 - Coverage: 49% → 85% overall; `fail_under` raised from 40 to 80.
 - Tool-layer coverage: 29–48% → 66–93%.
 - Models: 0% used → 100% integrated.
+- Wheel smoke (`scripts/smoke_install.sh`) covers build + install +
+  CLI invocation.
 
 ## [0.1.0] — 2026-04-18
 
