@@ -46,6 +46,15 @@ class UnraidNotConfiguredError(UnraidError):
     """API key was not configured but a tool was called."""
 
 
+class UnraidInitFailedError(UnraidError):
+    """API key was configured but the client's startup validation failed.
+
+    Distinct from :class:`UnraidNotConfiguredError` so tools can report the
+    real cause — network/auth/TLS failure at startup — instead of misleading
+    the operator into checking env vars for a key that is in fact set.
+    """
+
+
 def handle_client_error(error: Exception) -> NoReturn:
     """Map Unraid exceptions to FastMCP ToolError with agent-readable messages.
 
@@ -68,6 +77,10 @@ def handle_client_error(error: Exception) -> NoReturn:
         raise ToolError(f"Write operation blocked: {error}. Server is in read-only mode.") from error
     if isinstance(error, UnraidNotConfiguredError):
         raise ToolError(f"Unraid API not configured: {error}. Set UNRAID_API_KEY.") from error
+    if isinstance(error, UnraidInitFailedError):
+        raise ToolError(
+            f"Unraid API startup failed: {error}. Check host, TLS, and API-key permissions in the server logs.",
+        ) from error
     if isinstance(error, UnraidGraphQLError):
         raise ToolError(f"GraphQL error: {error}") from error
     if isinstance(error, UnraidError):

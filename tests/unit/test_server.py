@@ -104,8 +104,19 @@ class TestLifespanValidation:
             async with make_server_lifespan(config)(server) as context:
                 assert isinstance(context, ServerContext)
                 assert context.client is None
+                # Startup failure must be preserved for require_client to surface (#64).
+                assert isinstance(context.init_error, UnraidConnectionError)
+                assert "refused" in str(context.init_error)
 
         mock_client.close.assert_awaited_once()
+
+    async def test_context_init_error_is_none_when_api_key_missing(self):
+        # No key configured at all is distinct from "key present but startup failed".
+        config = _make_config(unraid_api_key=None)
+        server = create_server(config)
+        async with make_server_lifespan(config)(server) as context:
+            assert context.client is None
+            assert context.init_error is None
 
     async def test_context_client_is_set_when_validation_succeeds(self):
         config = _make_config()

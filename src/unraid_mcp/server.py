@@ -23,6 +23,7 @@ class ServerContext:
 
     config: UnraidConfig
     client: object | None = None  # UnraidClient | None — typed loosely to avoid circular imports
+    init_error: Exception | None = None  # populated when validate_connection() failed at startup
 
 
 def make_server_lifespan(config: UnraidConfig) -> Lifespan:
@@ -59,11 +60,17 @@ def make_server_lifespan(config: UnraidConfig) -> Lifespan:
             )
             try:
                 await client.validate_connection()
-            except Exception:
+            except Exception as exc:
                 logger.exception(
                     "Failed to validate Unraid API at %s — tools will return errors",
                     config.graphql_url,
                 )
+                # Stash the root cause so `require_client` can report it instead of
+                # the misleading "API not configured" (#64). The exception type is
+                # often enough — UnraidAuthError vs UnraidConnectionError — but the
+                # message (e.g. truncated GraphQL error, cert hostname mismatch) is
+                # what actually points the operator at the right fix.
+                context.init_error = exc
                 await client.close()
             else:
                 context.client = client
@@ -78,8 +85,10 @@ def make_server_lifespan(config: UnraidConfig) -> Lifespan:
                 try:
                     await context.client.close()  # type: ignore[attr-defined]
                     logger.info("Closed Unraid client")
-                except Exception:
-                    logger.exception("Error closing Unraid client")
+                except Exception as close_exc:
+                    # Include the exception type so an httpx/socket leak isn't
+                    # invisible at process exit (#64).
+                    logger.exception("Error closing Unraid client (%s)", type(close_exc).__name__)
 
     return _server_lifespan
 

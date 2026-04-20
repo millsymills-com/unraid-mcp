@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from unraid_mcp.errors import UnraidNotConfiguredError, UnraidReadOnlyError
+from unraid_mcp.errors import UnraidInitFailedError, UnraidNotConfiguredError, UnraidReadOnlyError
 from unraid_mcp.server import ServerContext
 
 if TYPE_CHECKING:
@@ -19,12 +19,24 @@ def get_ctx(ctx: Context) -> ServerContext:
 
 
 def require_client(ctx: Context) -> UnraidClient:
-    """Return the Unraid client, raising ``UnraidNotConfiguredError`` if absent."""
+    """Return the Unraid client, raising a typed error when unavailable.
+
+    Distinguishes three cases so operators see the right debugging direction:
+
+    - ``UnraidInitFailedError`` — API key was set but startup validation failed
+      (network, auth, TLS, schema drift). The original exception is chained.
+    - ``UnraidNotConfiguredError`` — API key really is not set.
+    """
     context = get_ctx(ctx)
     client = context.client
-    if client is None:
-        raise UnraidNotConfiguredError("UNRAID_API_KEY is not set or initial connection failed")
-    return client  # type: ignore[return-value]
+    if client is not None:
+        return client  # type: ignore[return-value]
+    init_error = context.init_error
+    if init_error is not None:
+        raise UnraidInitFailedError(
+            f"{type(init_error).__name__}: {init_error}",
+        ) from init_error
+    raise UnraidNotConfiguredError("UNRAID_API_KEY is not set")
 
 
 def require_readwrite(ctx: Context, action: str) -> UnraidClient:
