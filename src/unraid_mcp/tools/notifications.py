@@ -15,11 +15,26 @@ def register_notification_tools(mcp: FastMCP) -> None:
     """Register notification tools."""
 
     @mcp.tool(tags={"notifications"})
-    async def unraid_list_notifications(ctx: Context) -> list[Notification]:
-        """List active notifications (id, type, title, importance, timestamp)."""
+    async def unraid_list_notifications(
+        ctx: Context,
+        notification_type: str = "UNREAD",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[Notification]:
+        """List notifications.
+
+        Args:
+            notification_type: Which bin to list — ``UNREAD`` (default) or ``ARCHIVE``.
+            limit: Max entries to return (default 50).
+            offset: Pagination offset (default 0).
+        """
         try:
             client = require_client(ctx)
-            return await client.list_notifications()
+            return await client.list_notifications(
+                notification_type=notification_type,
+                limit=limit,
+                offset=offset,
+            )
         except Exception as e:
             handle_client_error(e)
 

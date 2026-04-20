@@ -59,7 +59,9 @@ class TestListContainers:
     @respx.mock
     async def test_list_containers_returns_list_of_models(self, client):
         containers = [{"id": "abc", "names": ["/plex"]}, {"id": "def", "names": ["/sonarr"]}]
-        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"dockerContainers": containers}}))
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(200, json={"data": {"docker": {"containers": containers}}}),
+        )
         result = await client.list_containers()
         assert [c.id for c in result] == ["abc", "def"]
         assert result[0].names == ["/plex"]
@@ -69,6 +71,56 @@ class TestListContainers:
         respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {}}))
         result = await client.list_containers()
         assert result == []
+
+    @respx.mock
+    async def test_list_containers_returns_empty_list_when_docker_null(self, client):
+        # Docker socket unavailable returns {"data": {"docker": null}}; don't crash.
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"docker": None}}))
+        result = await client.list_containers()
+        assert result == []
+
+
+class TestListDockerNetworks:
+    @respx.mock
+    async def test_list_docker_networks_returns_list(self, client):
+        networks = [{"id": "n1", "name": "bridge", "driver": "bridge"}]
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(200, json={"data": {"docker": {"networks": networks}}}),
+        )
+        result = await client.list_docker_networks()
+        assert [n.name for n in result] == ["bridge"]
+
+
+class TestListNotifications:
+    @respx.mock
+    async def test_list_notifications_reads_list_field(self, client):
+        entries = [{"id": "n1", "title": "t", "subject": "s", "description": "d", "importance": "INFO"}]
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(200, json={"data": {"notifications": {"id": "wrap", "list": entries}}}),
+        )
+        result = await client.list_notifications(notification_type="ARCHIVE", limit=25, offset=10)
+        assert [n.id for n in result] == ["n1"]
+        sent = json.loads(route.calls[0].request.content)
+        assert sent["variables"] == {"type": "ARCHIVE", "limit": 25, "offset": 10}
+
+
+class TestGetConnect:
+    @respx.mock
+    async def test_get_connect_merges_remote_access(self, client):
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "connect": {"id": "c", "dynamicRemoteAccess": {"enabledType": "DISABLED"}},
+                        "remoteAccess": {"accessType": "DISABLED", "forwardType": "STATIC", "port": None},
+                    },
+                },
+            ),
+        )
+        result = await client.get_connect()
+        assert result["dynamicRemoteAccess"]["enabledType"] == "DISABLED"
+        assert result["remoteAccess"]["accessType"] == "DISABLED"
 
 
 class TestListVms:

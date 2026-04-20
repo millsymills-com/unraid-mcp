@@ -27,14 +27,25 @@ _VALIDATION_TIMEOUT_SECONDS = 5
 
 # ── Queries ─────────────────────────────────────────────────────────────
 
+# Verified against Unraid API 4.32.x (2026-04) — live schema groups `versions`
+# into `core`/`packages`, and `memory` lost its aggregated totals in favor of
+# per-DIMM `layout` entries.
 QUERY_INFO = """
 query Info {
     info {
+        id
         os { platform distro release codename kernel arch hostname uptime }
         cpu { manufacturer brand vendor family model stepping speed cores threads processors }
-        memory { total free used active available }
+        memory {
+            id
+            layout { size type clockSpeed formFactor manufacturer partNum serialNum bank }
+        }
         baseboard { manufacturer model version serial }
-        versions { unraid kernel openssl docker }
+        versions {
+            id
+            core { unraid kernel api }
+            packages { openssl docker node npm nginx php git pm2 }
+        }
     }
 }
 """
@@ -62,28 +73,37 @@ query ParityHistory {
 }
 """
 
+# Verified against Unraid API 4.32.x — `Disk.temp` → `temperature`,
+# `Disk.interface` → `interfaceType`, `Disk.rotational` removed (closest
+# equivalent is the inverse of `isSpinning`).
 QUERY_DISKS = """
 query Disks {
     disks {
-        id name device type size temp rotational interface serialNum smartStatus
+        id name device type vendor size temperature interfaceType serialNum smartStatus isSpinning
     }
 }
 """
 
+# Verified against Unraid API 4.32.x — top-level `Query.dockerContainers` /
+# `Query.dockerNetworks` were removed in favor of a grouped `docker.containers`
+# / `docker.networks` shape. `DockerContainer.networkMode` no longer exists.
 QUERY_DOCKER_CONTAINERS = """
 query DockerContainers {
-    dockerContainers {
-        id names image imageId command created state status ports {
-            ip privatePort publicPort type
+    docker {
+        containers {
+            id names image imageId command created state status
+            autoStart
+            ports { ip privatePort publicPort type }
         }
-        autoStart networkMode
     }
 }
 """
 
 QUERY_DOCKER_NETWORKS = """
 query DockerNetworks {
-    dockerNetworks { id name driver scope created internal attachable ingress }
+    docker {
+        networks { id name driver scope created internal attachable ingress enableIPv6 }
+    }
 }
 """
 
@@ -110,10 +130,18 @@ query Users {
 }
 """
 
+# Verified against Unraid API 4.32.x — `Notifications` is a wrapper object;
+# entries live under `.list(filter: NotificationFilter)` and `.type` was
+# removed from the wrapper (it remains on individual `Notification`s).
+# NotificationFilter.type/offset/limit are all required; callers choose
+# between UNREAD and ARCHIVE bins.
 QUERY_NOTIFICATIONS = """
-query Notifications {
+query Notifications($type: NotificationType!, $limit: Int!, $offset: Int!) {
     notifications {
-        id type title subject description importance link timestamp formattedTimestamp
+        id
+        list(filter: { type: $type, limit: $limit, offset: $offset }) {
+            id type title subject description importance link timestamp formattedTimestamp
+        }
     }
 }
 """
@@ -126,12 +154,18 @@ QUERY_REGISTRATION = """
 query Registration { registration { state expiration type updateExpiration } }
 """
 
+# Verified against Unraid API 4.32.x — `Connect.dynamicRemoteAccessType`
+# became a nested `dynamicRemoteAccess { enabledType runningType error }`
+# object, and the legacy `config { accessType forwardType port }` fields
+# moved to the sibling top-level `remoteAccess` query. Both are fetched
+# in one round-trip so the tool can return a combined shape.
 QUERY_CONNECT = """
 query Connect {
     connect {
-        dynamicRemoteAccessType
-        config { accessType forwardType port }
+        id
+        dynamicRemoteAccess { enabledType runningType error }
     }
+    remoteAccess { accessType forwardType port }
 }
 """
 
@@ -277,7 +311,8 @@ class UnraidClient(BaseGraphQLClient):
     async def list_containers(self) -> list[DockerContainer]:
         """List all Docker containers."""
         result = await self.query(QUERY_DOCKER_CONTAINERS)
-        containers = result.get("dockerContainers") or []
+        docker = result.get("docker") or {}
+        containers = docker.get("containers") or []
         if not isinstance(containers, list):
             return []
         return [DockerContainer.model_validate(container) for container in containers]
@@ -285,7 +320,8 @@ class UnraidClient(BaseGraphQLClient):
     async def list_docker_networks(self) -> list[DockerNetwork]:
         """List Docker networks."""
         result = await self.query(QUERY_DOCKER_NETWORKS)
-        networks = result.get("dockerNetworks") or []
+        docker = result.get("docker") or {}
+        networks = docker.get("networks") or []
         if not isinstance(networks, list):
             return []
         return [DockerNetwork.model_validate(network) for network in networks]
@@ -311,13 +347,26 @@ class UnraidClient(BaseGraphQLClient):
             return []
         return [User.model_validate(user) for user in users]
 
-    async def list_notifications(self) -> list[Notification]:
-        """List notifications."""
-        result = await self.query(QUERY_NOTIFICATIONS)
-        notifications = result.get("notifications") or []
-        if not isinstance(notifications, list):
+    async def list_notifications(
+        self,
+        notification_type: str = "UNREAD",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[Notification]:
+        """List notifications (paginated via the server-side filter).
+
+        ``notification_type`` must be ``UNREAD`` or ``ARCHIVE`` — the live
+        schema requires the filter so callers pick which bin to read.
+        """
+        result = await self.query(
+            QUERY_NOTIFICATIONS,
+            variables={"type": notification_type, "limit": limit, "offset": offset},
+        )
+        notifications = result.get("notifications") or {}
+        entries = notifications.get("list") or []
+        if not isinstance(entries, list):
             return []
-        return [Notification.model_validate(notification) for notification in notifications]
+        return [Notification.model_validate(entry) for entry in entries]
 
     async def get_flash(self) -> dict[str, Any]:
         """Get Unraid USB flash drive metadata."""
@@ -330,9 +379,16 @@ class UnraidClient(BaseGraphQLClient):
         return result.get("registration", {})  # type: ignore[no-any-return]
 
     async def get_connect(self) -> dict[str, Any]:
-        """Get Unraid Connect remote-access configuration."""
+        """Get Unraid Connect remote-access configuration.
+
+        Merges the live schema's ``connect { dynamicRemoteAccess }`` object
+        with the sibling top-level ``remoteAccess { accessType forwardType port }``
+        query so callers see one combined shape.
+        """
         result = await self.query(QUERY_CONNECT)
-        return result.get("connect", {})  # type: ignore[no-any-return]
+        connect = result.get("connect") or {}
+        remote_access = result.get("remoteAccess") or {}
+        return {**connect, "remoteAccess": remote_access}
 
     # ── Write methods: array ────────────────────────────────────────────
 

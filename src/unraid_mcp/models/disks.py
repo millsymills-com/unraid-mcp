@@ -6,15 +6,21 @@ from unraid_mcp.models.common import UnraidBaseModel
 
 
 class Disk(UnraidBaseModel):
-    """A physical disk attached to the system."""
+    """A physical disk attached to the system.
+
+    Fields track the Unraid API 4.32+ schema: ``temp`` → ``temperature``,
+    ``interface`` → ``interface_type``, ``rotational`` dropped (the closest
+    live equivalent is the inverse of ``is_spinning``).
+    """
 
     id: str | None = None
     name: str | None = None
     device: str | None = None
     type: str | None = None
-    size: str | None = None
-    temp: int | None = None
-    rotational: bool | None = None
-    interface: str | None = None
+    vendor: str | None = None
+    size: int | None = None
+    temperature: float | None = None
+    interface_type: str | None = None
     serial_num: str | None = None
     smart_status: str | None = None
+    is_spinning: bool | None = None
