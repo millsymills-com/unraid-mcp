@@ -34,6 +34,97 @@ unraid-mcp
 
 Generate an API key in the Unraid WebGUI under **Settings → Management Access → API Keys**, or from a terminal on the server with `unraid-api apikey --create`. Enable the GraphQL API the first time via **Settings → Management Access → Developer Options**.
 
+Once configured, run `unraid-mcp --check-config` to verify connectivity before attaching an MCP client — it prints the resolved config (with the API key redacted), runs a single validation query, and exits 0 / 1 / 2 (ok / no key / validation failed).
+
+## MCP client setup
+
+`unraid-mcp` speaks MCP over stdio. Point any compatible client at the installed console script and pass your Unraid settings through the `env` block.
+
+### Claude Desktop
+
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+```jsonc
+{
+  "mcpServers": {
+    "unraid": {
+      "command": "unraid-mcp",
+      "env": {
+        "UNRAID_HOST": "tower.local",
+        "UNRAID_API_KEY": "your-key-here",
+        "UNRAID_MODE": "readonly"
+      }
+    }
+  }
+}
+```
+
+If you installed from source into a venv, use the venv's python explicitly:
+
+```jsonc
+{
+  "mcpServers": {
+    "unraid": {
+      "command": "/path/to/.venv/bin/unraid-mcp",
+      "env": { "UNRAID_HOST": "tower.local", "UNRAID_API_KEY": "your-key-here" }
+    }
+  }
+}
+```
+
+### Cursor
+
+Edit `~/.cursor/mcp.json` (or via **Settings → MCP → Add new MCP Server**):
+
+```jsonc
+{
+  "mcpServers": {
+    "unraid": {
+      "command": "unraid-mcp",
+      "env": {
+        "UNRAID_HOST": "tower.local",
+        "UNRAID_API_KEY": "your-key-here"
+      }
+    }
+  }
+}
+```
+
+### Continue.dev
+
+In `.continue/config.json`:
+
+```jsonc
+{
+  "experimental": {
+    "modelContextProtocolServers": [
+      {
+        "transport": {
+          "type": "stdio",
+          "command": "unraid-mcp",
+          "env": {
+            "UNRAID_HOST": "tower.local",
+            "UNRAID_API_KEY": "your-key-here"
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+### Claude Code (terminal)
+
+```bash
+claude mcp add unraid -- unraid-mcp
+```
+
+Then set env vars in the same shell, or use `claude mcp add unraid --env UNRAID_HOST=tower.local --env UNRAID_API_KEY=...`.
+
+### Enabling write tools
+
+The server starts in read-only mode by default. To expose the `start/stop/restart` family, set `UNRAID_MODE=readwrite` in the client's `env` block. To additionally expose `unraid_create_user` / `unraid_delete_user`, also set `UNRAID_ALLOW_USER_MUTATIONS=true` — these are double-gated because they modify OS-level accounts.
+
 ## Configuration
 
 See [.env.example](.env.example) for all configuration options.
