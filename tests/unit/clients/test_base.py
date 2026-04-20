@@ -1,5 +1,7 @@
 """Tests for the base GraphQL client."""
 
+import logging
+
 import httpx
 import pytest
 import respx
@@ -214,6 +216,51 @@ class TestClose:
     async def test_close_calls_aclose(self, client):
         await client.close()
         assert client._client.is_closed
+
+
+class TestApiKeyRedaction:
+    """API-key redaction filter protects against leaking the key via httpx DEBUG logs."""
+
+    async def test_key_is_redacted_in_httpx_logger_output(self, client, caplog):
+        # Simulate an httpcore DEBUG log line that includes the request headers.
+        with caplog.at_level("DEBUG", logger="httpcore.http11"):
+            logging.getLogger("httpcore.http11").debug(
+                "send_request_headers.started request=%s",
+                f"Request(headers={{'x-api-key': '{client._api_key}'}})",
+            )
+        messages = [r.getMessage() for r in caplog.records]
+        assert all(client._api_key not in m for m in messages), f"API key leaked in log: {messages}"
+        assert any("***REDACTED***" in m for m in messages)
+
+    async def test_non_matching_log_lines_pass_through(self, client, caplog):  # noqa: ARG002 — fixture installs the filter
+        with caplog.at_level("DEBUG", logger="httpx"):
+            logging.getLogger("httpx").debug("some unrelated log line")
+        messages = [r.getMessage() for r in caplog.records]
+        assert any("some unrelated log line" in m for m in messages)
+
+    async def test_close_detaches_filter(self, client):
+        logger_under_test = logging.getLogger("httpx")
+        assert client._redact_filter in logger_under_test.filters
+        await client.close()
+        assert client._redact_filter not in logger_under_test.filters
+
+    async def test_multiple_clients_have_independent_filters(self):
+        client_a = BaseGraphQLClient(
+            graphql_url="https://a.example/graphql",
+            api_key="key-aaaaaaaaaaaa",
+        )
+        client_b = BaseGraphQLClient(
+            graphql_url="https://b.example/graphql",
+            api_key="key-bbbbbbbbbbbb",
+        )
+        try:
+            assert client_a._redact_filter is not client_b._redact_filter
+            httpx_logger = logging.getLogger("httpx")
+            assert client_a._redact_filter in httpx_logger.filters
+            assert client_b._redact_filter in httpx_logger.filters
+        finally:
+            await client_a.close()
+            await client_b.close()
 
 
 class TestObservability:

@@ -59,6 +59,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   like `bridge` Docker network and `root` user. Opt-in via
   `UNRAID_API_KEY` and the `integration` marker; default `pytest`
   run still skips them all (#43).
+- API-key log redaction. A `logging.Filter` attached to `httpx` /
+  `httpcore` loggers at client construction time replaces the key
+  with `***REDACTED***` in any log record, so enabling DEBUG-level
+  HTTP tracing can't leak the `x-api-key` header. Detached on
+  `client.close()`.
 
 ### Changed
 - `validate_connection()` now propagates typed `UnraidError` subclasses
@@ -92,7 +97,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   structure instead of fictional per-domain subdirectories (#22).
 
 ### Coverage / quality
-- Unit tests: 66 → 157 passing.
+- Unit tests: 66 → 161 passing.
 - Integration smokes: 2 → 13 (opt-in).
 - Coverage: 49% → 85% overall; `fail_under` raised from 40 to 80.
 - Tool-layer coverage: 29–48% → 66–93%.
