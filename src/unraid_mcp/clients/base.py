@@ -30,6 +30,39 @@ logger = logging.getLogger(__name__)
 # meaningful operation name even when callers don't set `operationName`.
 _OPERATION_NAME_RE = re.compile(r"^\s*(?:query|mutation|subscription)\s+(\w+)")
 
+# Loggers where an operator turning on DEBUG could cause `x-api-key` to be
+# emitted verbatim (httpx and its lower-level HTTP engine). We attach a
+# redacting filter to these when the client is constructed so the key
+# never lands in log output regardless of third-party config.
+_REDACTED_LOGGER_NAMES: tuple[str, ...] = ("httpx", "httpcore", "httpcore.http11", "httpcore.connection")
+
+
+class _ApiKeyRedactingFilter(logging.Filter):
+    """Logging filter that replaces occurrences of the Unraid API key with ``***REDACTED***``.
+
+    Attached to third-party loggers in :class:`BaseGraphQLClient` so that
+    DEBUG-level httpx / httpcore output (which includes request headers)
+    doesn't leak the key even when the caller enables verbose logging.
+    """
+
+    def __init__(self, api_key: str) -> None:
+        super().__init__(name="unraid_mcp.api_key_redact")
+        self._api_key = api_key
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if not self._api_key:
+            return True
+        try:
+            message = record.getMessage()
+        except (TypeError, ValueError):
+            return True
+        if self._api_key in message:
+            # Collapse the record to a pre-formatted message so handlers
+            # downstream can't re-expand args and pull the key back in.
+            record.msg = message.replace(self._api_key, "***REDACTED***")
+            record.args = ()
+        return True
+
 
 class BaseGraphQLClient:
     """Base client for the Unraid GraphQL API.
@@ -59,6 +92,12 @@ class BaseGraphQLClient:
             verify=verify_ssl,
             timeout=httpx.Timeout(timeout),
         )
+        # Install the redaction filter on httpx / httpcore loggers so
+        # DEBUG-level dumps don't leak the API key. Each client owns its
+        # own filter instance so close() can remove exactly its own.
+        self._redact_filter = _ApiKeyRedactingFilter(api_key)
+        for name in _REDACTED_LOGGER_NAMES:
+            logging.getLogger(name).addFilter(self._redact_filter)
 
     # ── HTTP / GraphQL helpers ──────────────────────────────────────────
 
@@ -220,5 +259,7 @@ class BaseGraphQLClient:
         raise NotImplementedError
 
     async def close(self) -> None:
-        """Close the underlying HTTP client."""
+        """Close the underlying HTTP client and detach the log-redaction filter."""
+        for name in _REDACTED_LOGGER_NAMES:
+            logging.getLogger(name).removeFilter(self._redact_filter)
         await self._client.aclose()
