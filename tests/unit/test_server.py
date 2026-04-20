@@ -149,6 +149,60 @@ class TestCreateUserSchema:
         assert password_schema["writeOnly"] is True
 
 
+class TestSchemaDriftWarnings:
+    """Startup schema-compatibility probe (#68)."""
+
+    async def test_logs_drift_warnings_when_detected(self, caplog):
+        config = _make_config()
+        mock_client = AsyncMock()
+        mock_client.validate_connection.return_value = None
+        mock_client.check_schema_compatibility.return_value = [
+            "Disk: missing fields ['temp']",
+            "Flash: type missing from server schema",
+        ]
+        with patch("unraid_mcp.clients.unraid.UnraidClient", return_value=mock_client):
+            server = create_server(config)
+            with caplog.at_level("WARNING", logger="unraid_mcp.server"):
+                async with make_server_lifespan(config)(server):
+                    pass
+
+        drift_lines = [r.message for r in caplog.records if "schema drift" in r.message]
+        assert len(drift_lines) == 2
+        summary = [r.message for r in caplog.records if "schema-drift issue(s)" in r.message]
+        assert summary, "expected a summary WARNING with the drift count"
+
+    async def test_logs_info_when_no_drift(self, caplog):
+        config = _make_config()
+        mock_client = AsyncMock()
+        mock_client.validate_connection.return_value = None
+        mock_client.check_schema_compatibility.return_value = []
+        with patch("unraid_mcp.clients.unraid.UnraidClient", return_value=mock_client):
+            server = create_server(config)
+            with caplog.at_level("INFO", logger="unraid_mcp.server"):
+                async with make_server_lifespan(config)(server):
+                    pass
+
+        assert any("Schema compatibility check passed" in r.message for r in caplog.records)
+
+    async def test_swallows_introspection_failure(self, caplog):
+        # Older servers without introspection shouldn't crash startup.
+        from unraid_mcp.errors import UnraidGraphQLError
+
+        config = _make_config()
+        mock_client = AsyncMock()
+        mock_client.validate_connection.return_value = None
+        mock_client.check_schema_compatibility.side_effect = UnraidGraphQLError(
+            "Field '__schema' not supported",
+        )
+        with patch("unraid_mcp.clients.unraid.UnraidClient", return_value=mock_client):
+            server = create_server(config)
+            with caplog.at_level("WARNING", logger="unraid_mcp.server"):
+                async with make_server_lifespan(config)(server):
+                    pass
+
+        assert any("introspection unavailable" in r.message for r in caplog.records)
+
+
 class TestTlsWarning:
     """Emit a warning when HTTPS is used without TLS verification."""
 

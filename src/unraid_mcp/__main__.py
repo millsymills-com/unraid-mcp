@@ -21,6 +21,43 @@ def _redact_api_key(key: str | None) -> str:
     return f"{key[:4]}…{key[-2:]}"
 
 
+async def _check_schema() -> int:
+    """Introspect the live schema and print drift report.
+
+    Exit codes:
+        0 — schema matches client expectations
+        1 — no API key configured
+        2 — drift detected (details printed) or connection failure
+    """
+    config = UnraidConfig()
+    if not config.api_enabled:
+        print("No API key configured — set UNRAID_API_KEY to run the schema check.")
+        return 1
+
+    client = UnraidClient(
+        graphql_url=config.graphql_url,
+        api_key=config.unraid_api_key,  # type: ignore[arg-type]
+        verify_ssl=config.unraid_verify_ssl,
+        timeout=config.unraid_request_timeout,
+        max_retries=config.unraid_max_retries,
+    )
+    try:
+        try:
+            drifts = await client.check_schema_compatibility()
+        except UnraidError as exc:
+            print(f"Schema check failed: {type(exc).__name__}: {exc}")
+            return 2
+        if not drifts:
+            print(f"Schema compatibility check passed against {config.graphql_url}")
+            return 0
+        print(f"Detected {len(drifts)} schema-drift issue(s):")
+        for drift in drifts:
+            print(f"  • {drift}")
+        return 2
+    finally:
+        await client.close()
+
+
 async def _check_config() -> int:
     """Print effective config and validate connectivity. Returns exit code."""
     config = UnraidConfig()
@@ -77,6 +114,17 @@ def _build_parser() -> argparse.ArgumentParser:
             "Exit 0 on success, 1 when no API key is configured, 2 on validation failure."
         ),
     )
+    parser.add_argument(
+        "--check-schema",
+        action="store_true",
+        help=(
+            "Introspect the live Unraid GraphQL schema and report any drift "
+            "from what this client expects to query. Exit 0 when the schema "
+            "is compatible, 1 when no API key is configured, 2 on drift or "
+            "connection failure. Run this against a new Unraid release to "
+            "check upgrade compatibility before shipping."
+        ),
+    )
     return parser
 
 
@@ -85,6 +133,8 @@ def main() -> None:
     args = _build_parser().parse_args()
     if args.check_config:
         sys.exit(asyncio.run(_check_config()))
+    if args.check_schema:
+        sys.exit(asyncio.run(_check_schema()))
     server = create_server()
     server.run()
 

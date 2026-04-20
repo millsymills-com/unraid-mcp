@@ -243,6 +243,144 @@ mutation DeleteUser($input: deleteUserInput!) {
 """
 
 
+# ── Schema compatibility check (#68) ────────────────────────────────────
+
+# Fields this client reads from the Unraid GraphQL schema. Checked at
+# startup via :meth:`UnraidClient.check_schema_compatibility` so drift is
+# caught at boot instead of per-tool-call. Update in lockstep with the
+# query/mutation constants above — the two should move together.
+#
+# Only the Query / Mutation root fields and a handful of nested types are
+# tracked. That's deliberate: too-granular coverage turns every legit
+# server-side addition into a false positive, and GraphQL is additive so
+# extra fields on the server side are always safe.
+SCHEMA_EXPECTATIONS: dict[str, frozenset[str]] = {
+    "Query": frozenset(
+        {
+            "info",
+            "array",
+            "disks",
+            "disk",
+            "dockerContainers",
+            "dockerNetworks",
+            "vms",
+            "shares",
+            "users",
+            "notifications",
+            "flash",
+            "registration",
+            "connect",
+            "parityHistory",
+        },
+    ),
+    "Mutation": frozenset(
+        {
+            "startArray",
+            "stopArray",
+            "startParityCheck",
+            "pauseParityCheck",
+            "resumeParityCheck",
+            "cancelParityCheck",
+            "archiveNotification",
+            "deleteNotification",
+            "archiveAll",
+            "addUser",
+            "deleteUser",
+            "docker",
+            "vm",
+        },
+    ),
+    # Top-level result types we select fields from
+    "Disk": frozenset(
+        {"id", "name", "device", "type", "size", "temp", "rotational", "interface", "serialNum", "smartStatus"},
+    ),
+    "DockerContainer": frozenset(
+        {
+            "id",
+            "names",
+            "image",
+            "imageId",
+            "command",
+            "created",
+            "state",
+            "status",
+            "ports",
+            "autoStart",
+            "networkMode",
+        },
+    ),
+    "DockerNetwork": frozenset(
+        {"id", "name", "driver", "scope", "created", "internal", "attachable", "ingress"},
+    ),
+    "Vms": frozenset({"domain"}),
+    "VmDomain": frozenset({"uuid", "name", "state"}),
+    "Notification": frozenset(
+        {
+            "id",
+            "type",
+            "title",
+            "subject",
+            "description",
+            "importance",
+            "link",
+            "timestamp",
+            "formattedTimestamp",
+        },
+    ),
+    "Flash": frozenset({"guid", "vendor", "product"}),
+    "Connect": frozenset({"dynamicRemoteAccessType", "config"}),
+}
+
+
+_INTROSPECTION_QUERY = """
+query Introspect {
+    __schema {
+        queryType { name }
+        mutationType { name }
+        types { name fields { name } inputFields { name } }
+    }
+}
+"""
+
+
+async def _introspect(client: BaseGraphQLClient) -> dict[str, set[str]]:
+    """Fetch the server schema and return ``{typeName: {fieldName, ...}}``."""
+    result = await client.query(_INTROSPECTION_QUERY)
+    schema = result.get("__schema") or {}
+    types = schema.get("types") or []
+    actual: dict[str, set[str]] = {}
+    for t in types:
+        name = t.get("name") if isinstance(t, dict) else None
+        if not isinstance(name, str):
+            continue
+        fields = t.get("fields") or t.get("inputFields") or []
+        actual[name] = {f["name"] for f in fields if isinstance(f, dict) and isinstance(f.get("name"), str)}
+    return actual
+
+
+def compute_schema_drift(
+    expected: dict[str, frozenset[str]],
+    actual: dict[str, set[str]],
+) -> list[str]:
+    """Return human-readable drift descriptions; empty list when schema matches.
+
+    Each entry names the type and missing field so operators can map
+    directly to the query that reads it.
+    """
+    drifts: list[str] = []
+    for type_name, expected_fields in expected.items():
+        actual_fields = actual.get(type_name)
+        if actual_fields is None:
+            drifts.append(
+                f"{type_name}: type missing from server schema (client expects fields {sorted(expected_fields)})",
+            )
+            continue
+        missing = expected_fields - actual_fields
+        if missing:
+            drifts.append(f"{type_name}: missing fields {sorted(missing)}")
+    return drifts
+
+
 class UnraidClient(BaseGraphQLClient):
     """Typed wrapper around the Unraid GraphQL API."""
 
@@ -441,6 +579,22 @@ class UnraidClient(BaseGraphQLClient):
         return await self.mutate(MUTATION_DELETE_USER, variables={"input": {"name": name}})
 
     # ── Lifecycle ───────────────────────────────────────────────────────
+
+    async def check_schema_compatibility(self) -> list[str]:
+        """Introspect the server schema and return drift descriptions.
+
+        Empty list means the live schema satisfies :data:`SCHEMA_EXPECTATIONS`.
+        Any mismatch (removed types, renamed fields, missing root queries) is
+        reported as a string entry. Called at startup by the server lifespan
+        (#68) so operators see drift in the server log rather than at the
+        first tool call.
+
+        Does not raise on drift — the server still starts. It raises the
+        usual transport exceptions on connection failure so the caller can
+        treat introspection the same as any other GraphQL call.
+        """
+        actual = await _introspect(self)
+        return compute_schema_drift(SCHEMA_EXPECTATIONS, actual)
 
     async def validate_connection(self) -> None:
         """Validate connectivity by issuing a single short-timeout query.

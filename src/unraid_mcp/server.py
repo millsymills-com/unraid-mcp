@@ -36,7 +36,7 @@ def make_server_lifespan(config: UnraidConfig) -> Lifespan:
     """
 
     @lifespan  # type: ignore[arg-type]
-    async def _server_lifespan(_server: FastMCP) -> AsyncIterator[ServerContext]:
+    async def _server_lifespan(_server: FastMCP) -> AsyncIterator[ServerContext]:  # noqa: PLR0912 — startup flow
         context = ServerContext(config=config)
 
         # Lazily import the client to avoid circular deps at module load time
@@ -68,6 +68,28 @@ def make_server_lifespan(config: UnraidConfig) -> Lifespan:
             else:
                 context.client = client
                 logger.info("Unraid client initialized and validated")
+                # Schema-compatibility probe (#68) — warns on drift but does
+                # not fail startup. A failed introspection call itself is
+                # logged and ignored so an older server without schema
+                # introspection support still boots the MCP server cleanly.
+                try:
+                    drifts = await client.check_schema_compatibility()
+                except Exception:
+                    logger.warning(
+                        "Schema-compatibility check failed (introspection unavailable?); continuing.",
+                        exc_info=True,
+                    )
+                else:
+                    if drifts:
+                        for drift in drifts:
+                            logger.warning("schema drift: %s", drift)
+                        logger.warning(
+                            "Detected %d schema-drift issue(s); "
+                            "tools reading these fields will fail until queries are updated.",
+                            len(drifts),
+                        )
+                    else:
+                        logger.info("Schema compatibility check passed")
         else:
             logger.warning("UNRAID_API_KEY not set — tools will return 'not configured' errors")
 
