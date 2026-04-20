@@ -4,7 +4,13 @@ Production-grade Python MCP server for the Unraid GraphQL API.
 
 ## Status
 
-**Under active development** — see [CLAUDE.md](CLAUDE.md) for the architectural overview.
+**Under active development.** The `0.1.0` release on PyPI has known GraphQL schema-drift issues against recent Unraid API versions — several tools (Docker, VMs, users, notifications, parts of `unraid_get_info`) need query fixes tracked in issues #51–#62. Build from source, or pin to a post-fix release, until those land. See [CLAUDE.md](CLAUDE.md) for the architectural overview.
+
+### Operational notes
+
+- **Read-only by default.** Write tools (`start_*`, `stop_*`, `delete_*`, etc.) are invisible unless `UNRAID_MODE=readwrite` is set. `unraid_create_user` / `unraid_delete_user` require `UNRAID_ALLOW_USER_MUTATIONS=true` on top of that.
+- **TLS verification is off by default** (`UNRAID_VERIFY_SSL=false`) because most Unraid servers use self-signed certs. Set it to `true` if you terminate TLS with a trusted cert in front.
+- **The Unraid GraphQL API must be enabled manually** in the WebGUI under **Settings → Management Access → Developer Options**. Without it, `unraid-mcp --check-config` exits non-zero.
 
 ## Features
 
@@ -16,7 +22,7 @@ Production-grade Python MCP server for the Unraid GraphQL API.
 ## Quick Start
 
 ```bash
-# Install from PyPI (once published)
+# Install from PyPI
 uv pip install unraid-mcp
 
 # Or install from source
