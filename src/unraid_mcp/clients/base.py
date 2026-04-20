@@ -30,6 +30,12 @@ logger = logging.getLogger(__name__)
 # meaningful operation name even when callers don't set `operationName`.
 _OPERATION_NAME_RE = re.compile(r"^\s*(?:query|mutation|subscription)\s+(\w+)")
 
+# Max characters included in exception messages. Deliberately generous (not the
+# old 200-char cap) so GraphQL error payloads — which can list many fields and
+# their locations — reach the operator intact. The full response body is also
+# emitted at DEBUG level regardless of this cap.
+_MAX_ERROR_BODY_CHARS = 4000
+
 # Loggers where an operator turning on DEBUG could cause `x-api-key` to be
 # emitted verbatim (httpx and its lower-level HTTP engine). We attach a
 # redacting filter to these when the client is constructed so the key
@@ -101,12 +107,26 @@ class BaseGraphQLClient:
 
     # ── HTTP / GraphQL helpers ──────────────────────────────────────────
 
+    @staticmethod
+    def _truncate_for_error(text: str, limit: int = _MAX_ERROR_BODY_CHARS) -> str:
+        """Truncate text for inclusion in exception messages.
+
+        Shorter limits hide most real GraphQL error payloads (which list
+        every invalid field + its location). The full body is still emitted
+        at DEBUG level — see callers.
+        """
+        if len(text) <= limit:
+            return text
+        return text[:limit] + f"… [truncated, {len(text) - limit} more chars — enable DEBUG for full body]"
+
     def _raise_for_status(self, response: httpx.Response) -> None:
         """Map HTTP status codes to typed exceptions."""
         if response.is_success:
             return
         status = response.status_code
-        body = response.text[:200]
+        full_body = response.text
+        logger.debug("graphql HTTP %d full body: %s", status, full_body)
+        body = self._truncate_for_error(full_body)
         if status in (401, 403):
             raise UnraidAuthError(f"HTTP {status}: {body}", status_code=status)
         if status == 404:
@@ -120,9 +140,10 @@ class BaseGraphQLClient:
         try:
             payload = response.json()
         except ValueError as exc:
-            body = response.text[:200]
+            full_body = response.text
+            logger.debug("graphql HTTP %d non-JSON full body: %s", response.status_code, full_body)
             raise UnraidError(
-                f"Invalid JSON in response (HTTP {response.status_code}): {body}",
+                f"Invalid JSON in response (HTTP {response.status_code}): {self._truncate_for_error(full_body)}",
                 status_code=None,
             ) from exc
         if not isinstance(payload, dict):

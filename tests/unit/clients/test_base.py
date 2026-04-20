@@ -96,6 +96,40 @@ class TestErrorMapping:
             await client.query("query { x }")
 
     @respx.mock
+    async def test_error_body_truncation_is_generous(self, client):
+        # Regression for #80: the old 200-char cap chopped most GraphQL error
+        # payloads. We now allow up to 4000 chars in the exception message.
+        long_body = "X" * 3500
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(400, text=long_body))
+        with pytest.raises(UnraidError) as exc_info:
+            await client.query("query { x }")
+        assert "X" * 3500 in str(exc_info.value), "should keep the full 3500-char body verbatim"
+
+    @respx.mock
+    async def test_error_body_truncation_above_limit_keeps_marker(self, client):
+        long_body = "X" * 5000
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(400, text=long_body))
+        with pytest.raises(UnraidError) as exc_info:
+            await client.query("query { x }")
+        message = str(exc_info.value)
+        assert "truncated" in message
+        assert "enable DEBUG" in message
+
+    @respx.mock
+    async def test_error_body_full_logged_at_debug(self, client, caplog):
+        # Operators can recover the full body by enabling DEBUG on the client
+        # logger even when the exception message is capped.
+        long_body = "Y" * 5000
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(400, text=long_body))
+        with (
+            caplog.at_level("DEBUG", logger="unraid_mcp.clients.base"),
+            pytest.raises(UnraidError),
+        ):
+            await client.query("query { x }")
+        debug_lines = [r.message for r in caplog.records if r.levelname == "DEBUG"]
+        assert any("Y" * 5000 in line for line in debug_lines), "full body should appear at DEBUG"
+
+    @respx.mock
     async def test_graphql_errors_array_raises_graphql_error(self, client):
         respx.post(GRAPHQL_URL).mock(
             return_value=httpx.Response(
