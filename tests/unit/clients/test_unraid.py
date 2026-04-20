@@ -24,6 +24,55 @@ def client():
     )
 
 
+class TestGetFlash:
+    @respx.mock
+    async def test_get_flash_returns_dict_on_success(self, client):
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={"data": {"flash": {"guid": "ABCD", "vendor": "SanDisk", "product": "Cruzer"}}},
+            ),
+        )
+        result = await client.get_flash()
+        assert result == {"guid": "ABCD", "vendor": "SanDisk", "product": "Cruzer"}
+
+    @respx.mock
+    async def test_get_flash_handles_server_null_violation(self, client):
+        # Regression for #52: some Unraid servers return null for the
+        # non-nullable Flash.guid field. Strict GraphQL validation then
+        # rejects the entire response. We translate that into a structured
+        # placeholder instead of a hard error.
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "errors": [{"message": "Cannot return null for non-nullable field Flash.guid."}],
+                    "data": None,
+                },
+            ),
+        )
+        result = await client.get_flash()
+        assert result["available"] is False
+        assert result["guid"] is None
+        assert "non-null-schema bug" in result["error"]
+
+    @respx.mock
+    async def test_get_flash_reraises_unrelated_graphql_errors(self, client):
+        # Only the specific Flash.guid null-violation should be swallowed;
+        # anything else (e.g. auth failure, unrelated field errors) must
+        # still propagate so tool callers see the real cause.
+        from unraid_mcp.errors import UnraidGraphQLError
+
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={"errors": [{"message": "Field 'flash' has unrelated problem"}], "data": None},
+            ),
+        )
+        with pytest.raises(UnraidGraphQLError, match="unrelated problem"):
+            await client.get_flash()
+
+
 class TestGetInfo:
     @respx.mock
     async def test_get_info_returns_system_info_model(self, client):

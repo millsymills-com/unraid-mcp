@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 
 from unraid_mcp.clients.base import BaseGraphQLClient
-from unraid_mcp.errors import UnraidConnectionError
+from unraid_mcp.errors import UnraidConnectionError, UnraidGraphQLError
 from unraid_mcp.models.array import ArrayState, ParityHistoryEntry
 from unraid_mcp.models.disks import Disk
 from unraid_mcp.models.docker import DockerContainer, DockerNetwork
@@ -23,6 +23,17 @@ logger = logging.getLogger(__name__)
 
 # Validation goes around the retry loop to fail fast on first-run typos.
 _VALIDATION_TIMEOUT_SECONDS = 5
+
+
+def _is_flash_null_violation(message: str) -> bool:
+    """Match the GraphQL error the server emits when ``Flash.guid`` is null.
+
+    Matching on substrings rather than equality so the real message
+    ("Cannot return null for non-nullable field Flash.guid.") survives
+    surrounding context like retry counters or semicolon-joined errors
+    from :meth:`BaseGraphQLClient._check_graphql_errors`.
+    """
+    return "non-nullable field Flash.guid" in message
 
 
 # ── Queries ─────────────────────────────────────────────────────────────
@@ -320,8 +331,32 @@ class UnraidClient(BaseGraphQLClient):
         return [Notification.model_validate(notification) for notification in notifications]
 
     async def get_flash(self) -> dict[str, Any]:
-        """Get Unraid USB flash drive metadata."""
-        result = await self.query(QUERY_FLASH)
+        """Get Unraid USB flash drive metadata.
+
+        The live Unraid schema declares every ``Flash`` field as non-nullable,
+        but the server returns ``null`` for ``guid`` on some registration
+        states (unregistered trials, license transitions). GraphQL strict
+        validation then rejects the entire response. When we see that shape,
+        we return a structured placeholder rather than raising — the tool
+        caller gets a usable signal ("flash present but guid unavailable")
+        instead of a hard error that looks like a client bug (#52).
+        """
+        try:
+            result = await self.query(QUERY_FLASH)
+        except UnraidGraphQLError as exc:
+            if _is_flash_null_violation(str(exc)):
+                logger.warning(
+                    "Flash GUID is null on this server (known Unraid bug on some "
+                    "registration states); returning placeholder shape.",
+                )
+                return {
+                    "guid": None,
+                    "vendor": None,
+                    "product": None,
+                    "available": False,
+                    "error": "Server returned null for Flash.guid — Unraid non-null-schema bug.",
+                }
+            raise
         return result.get("flash", {})  # type: ignore[no-any-return]
 
     async def get_registration(self) -> dict[str, Any]:
