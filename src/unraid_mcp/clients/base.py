@@ -9,6 +9,7 @@ from typing import Any
 
 import httpx
 from tenacity import (
+    before_sleep_log,
     retry,
     retry_if_exception_type,
     stop_after_attempt,
@@ -22,6 +23,7 @@ from unraid_mcp.errors import (
     UnraidGraphQLError,
     UnraidNotFoundError,
     UnraidRateLimitError,
+    UnraidServerError,
 )
 
 logger = logging.getLogger(__name__)
@@ -113,6 +115,8 @@ class BaseGraphQLClient:
             raise UnraidNotFoundError(f"HTTP {status}: {body}", status_code=status)
         if status == 429:
             raise UnraidRateLimitError(f"HTTP {status}: {body}", status_code=status)
+        if 500 <= status < 600:
+            raise UnraidServerError(f"HTTP {status}: {body}", status_code=status)
         raise UnraidError(f"HTTP {status}: {body}", status_code=status)
 
     def _parse_json(self, response: httpx.Response) -> dict[str, Any]:
@@ -176,17 +180,37 @@ class BaseGraphQLClient:
                 return match.group(1)
         return "<anonymous>"
 
-    async def _post(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """POST a JSON body to the GraphQL endpoint with retry on transient errors."""
+    async def _post(self, payload: dict[str, Any], *, is_mutation: bool = False) -> dict[str, Any]:
+        """POST a JSON body to the GraphQL endpoint with retry on transient errors.
+
+        Queries retry on ``ConnectError``, ``TimeoutException``, and 5xx (``UnraidServerError``).
+        Mutations retry only on ``ConnectError`` — a timeout or 5xx can mean the request
+        was already processed on the server, and a naive retry would double-execute
+        non-idempotent operations like ``startParityCheck`` or ``createUser``.
+        """
+        retry_exceptions: tuple[type[BaseException], ...]
+        if is_mutation:
+            retry_exceptions = (httpx.ConnectError,)
+        else:
+            retry_exceptions = (httpx.ConnectError, httpx.TimeoutException, UnraidServerError)
 
         @retry(
             stop=stop_after_attempt(self._max_retries),
             wait=wait_exponential(multiplier=1, min=1, max=10),
-            retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException)),
+            retry=retry_if_exception_type(retry_exceptions),
+            before_sleep=before_sleep_log(logger, logging.WARNING),
             reraise=True,
         )
         async def _do() -> httpx.Response:
-            return await self._client.post(self._graphql_url, json=payload)
+            response = await self._client.post(self._graphql_url, json=payload)
+            # Raise 5xx inside the retry loop so the decorator can retry it for queries.
+            # Other 4xx statuses propagate via _raise_for_status below and are not retried.
+            if 500 <= response.status_code < 600:
+                raise UnraidServerError(
+                    f"HTTP {response.status_code}: {response.text[:200]}",
+                    status_code=response.status_code,
+                )
+            return response
 
         operation = self._operation_name(payload)
         start = time.perf_counter()
@@ -216,9 +240,9 @@ class BaseGraphQLClient:
 
         Raises:
             UnraidAuthError, UnraidNotFoundError, UnraidRateLimitError,
-            UnraidConnectionError, UnraidGraphQLError, UnraidError.
+            UnraidConnectionError, UnraidGraphQLError, UnraidServerError, UnraidError.
         """
-        return await self._execute(query, variables, operation_name)
+        return await self._execute(query, variables, operation_name, is_mutation=False)
 
     async def mutate(
         self,
@@ -226,21 +250,27 @@ class BaseGraphQLClient:
         variables: dict[str, Any] | None = None,
         operation_name: str | None = None,
     ) -> dict[str, Any]:
-        """Execute a GraphQL mutation. Same semantics as :meth:`query`."""
-        return await self._execute(mutation, variables, operation_name)
+        """Execute a GraphQL mutation.
+
+        Retries are restricted to ``ConnectError`` — timeouts and 5xx responses
+        are not retried because the request may have already been processed.
+        """
+        return await self._execute(mutation, variables, operation_name, is_mutation=True)
 
     async def _execute(
         self,
         document: str,
         variables: dict[str, Any] | None,
         operation_name: str | None,
+        *,
+        is_mutation: bool,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {"query": document}
         if variables:
             payload["variables"] = variables
         if operation_name:
             payload["operationName"] = operation_name
-        body = await self._post(payload)
+        body = await self._post(payload, is_mutation=is_mutation)
         data = body.get("data")
         if data is None:
             raise UnraidError("GraphQL response missing 'data' field")

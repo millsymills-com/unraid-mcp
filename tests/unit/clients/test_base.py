@@ -14,6 +14,7 @@ from unraid_mcp.errors import (
     UnraidGraphQLError,
     UnraidNotFoundError,
     UnraidRateLimitError,
+    UnraidServerError,
 )
 
 GRAPHQL_URL = "https://tower.local:443/graphql"
@@ -90,9 +91,10 @@ class TestErrorMapping:
             await client.query("query { x }")
 
     @respx.mock
-    async def test_500_raises_generic_error(self, client):
+    async def test_500_raises_server_error(self, client):
+        # 500 with no further retries succeeds in raising UnraidServerError (subclass of UnraidError).
         respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(500, text="Internal Server Error"))
-        with pytest.raises(UnraidError, match="500"):
+        with pytest.raises(UnraidServerError, match="500"):
             await client.query("query { x }")
 
     @respx.mock
@@ -210,6 +212,59 @@ class TestRetry:
         with pytest.raises(UnraidAuthError):
             await client.query("query { x }")
         assert route.call_count == 1
+
+    @respx.mock
+    async def test_query_retries_on_timeout_then_succeeds(self, client):
+        route = respx.post(GRAPHQL_URL)
+        route.side_effect = [
+            httpx.ReadTimeout("Read timed out"),
+            httpx.Response(200, json={"data": {"ok": True}}),
+        ]
+        result = await client.query("query { ok }")
+        assert result == {"ok": True}
+        assert route.call_count == 2
+
+    @respx.mock
+    async def test_query_retries_on_5xx_then_succeeds(self, client):
+        route = respx.post(GRAPHQL_URL)
+        route.side_effect = [
+            httpx.Response(503, text="Service Unavailable"),
+            httpx.Response(200, json={"data": {"ok": True}}),
+        ]
+        result = await client.query("query { ok }")
+        assert result == {"ok": True}
+        assert route.call_count == 2
+
+    @respx.mock
+    async def test_mutation_does_not_retry_on_timeout(self, client):
+        # A ReadTimeout means the request was fully sent — the server may have
+        # processed the mutation, so retrying could double-execute. Fail fast.
+        route = respx.post(GRAPHQL_URL).mock(side_effect=httpx.ReadTimeout("Read timed out"))
+        with pytest.raises(UnraidConnectionError, match="Read timed out"):
+            await client.mutate("mutation { startArray { state } }")
+        assert route.call_count == 1
+
+    @respx.mock
+    async def test_mutation_does_not_retry_on_5xx(self, client):
+        # A 503 during a mutation is ambiguous — server state is unclear, so
+        # retrying risks double-execution (e.g. createUser → uniqueness violation).
+        route = respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(503, text="Service Unavailable"))
+        with pytest.raises(UnraidServerError, match="503"):
+            await client.mutate("mutation { startArray { state } }")
+        assert route.call_count == 1
+
+    @respx.mock
+    async def test_mutation_still_retries_on_connect_error(self, client):
+        # Connection-refused means the TCP handshake never completed — the server
+        # didn't see the request, so retry is safe for mutations too.
+        route = respx.post(GRAPHQL_URL)
+        route.side_effect = [
+            httpx.ConnectError("Connection refused"),
+            httpx.Response(200, json={"data": {"startArray": {"state": "STARTED"}}}),
+        ]
+        result = await client.mutate("mutation { startArray { state } }")
+        assert result == {"startArray": {"state": "STARTED"}}
+        assert route.call_count == 2
 
 
 class TestClose:

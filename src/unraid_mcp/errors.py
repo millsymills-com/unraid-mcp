@@ -38,6 +38,10 @@ class UnraidGraphQLError(UnraidError):
     """GraphQL response contained an ``errors`` array."""
 
 
+class UnraidServerError(UnraidError):
+    """Server-side failure (HTTP 5xx). Idempotent queries may be retried; mutations are not."""
+
+
 class UnraidReadOnlyError(UnraidError):
     """Write operation attempted in read-only mode."""
 
@@ -70,6 +74,8 @@ def handle_client_error(error: Exception) -> NoReturn:
         raise ToolError(f"Unraid API not configured: {error}. Set UNRAID_API_KEY.") from error
     if isinstance(error, UnraidGraphQLError):
         raise ToolError(f"GraphQL error: {error}") from error
+    if isinstance(error, UnraidServerError):
+        raise ToolError(f"Unraid server error: {error}. Server may be transient; try again.") from error
     if isinstance(error, UnraidError):
         raise ToolError(f"Unraid API error: {error}") from error
     # Unexpected errors
