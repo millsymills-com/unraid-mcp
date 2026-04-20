@@ -2,20 +2,45 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import functools
+from typing import TYPE_CHECKING, Any, TypeVar
 
-from unraid_mcp.errors import UnraidNotConfiguredError, UnraidReadOnlyError
+from unraid_mcp.errors import UnraidNotConfiguredError, UnraidReadOnlyError, handle_client_error
 from unraid_mcp.server import ServerContext
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from fastmcp import Context
 
     from unraid_mcp.clients.unraid import UnraidClient
 
 
+_R = TypeVar("_R")
+
+
 def get_ctx(ctx: Context) -> ServerContext:
     """Extract the typed lifespan context from a FastMCP ``Context``."""
     return ctx.lifespan_context  # type: ignore[return-value]
+
+
+def tool_error_boundary(func: Callable[..., Awaitable[_R]]) -> Callable[..., Awaitable[_R]]:
+    """Wrap an async tool so any raised exception is mapped via :func:`handle_client_error`.
+
+    Replaces the copy-pasted ``try: ... except Exception as e: handle_client_error(e)``
+    block that used to live in every tool body. ``handle_client_error`` raises
+    ``ToolError``, so the wrapper itself never returns on error — the
+    ``Awaitable[_R]`` return annotation describes the success path.
+    """
+
+    @functools.wraps(func)
+    async def _wrapper(*args: Any, **kwargs: Any) -> _R:
+        try:
+            return await func(*args, **kwargs)
+        except Exception as exc:
+            handle_client_error(exc)
+
+    return _wrapper
 
 
 def require_client(ctx: Context) -> UnraidClient:

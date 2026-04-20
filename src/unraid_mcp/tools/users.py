@@ -8,9 +8,9 @@ from typing import Annotated, Any
 from fastmcp import Context, FastMCP
 from pydantic import Field
 
-from unraid_mcp.errors import UnraidError, handle_client_error
+from unraid_mcp.errors import UnraidError
 from unraid_mcp.models.users import User
-from unraid_mcp.tools._helpers import require_client, require_user_mutation
+from unraid_mcp.tools._helpers import require_client, require_user_mutation, tool_error_boundary
 
 # Only env vars starting with this prefix are readable via `password_env_var`
 # — prevents an MCP client from fishing for arbitrary secrets like
@@ -47,18 +47,17 @@ def register_user_tools(mcp: FastMCP) -> None:
     """Register user tools."""
 
     @mcp.tool(tags={"users"})
+    @tool_error_boundary
     async def unraid_list_users(ctx: Context) -> list[User]:
         """List Unraid users (id, name, description, roles)."""
-        try:
-            client = require_client(ctx)
-            return await client.list_users()
-        except Exception as e:
-            handle_client_error(e)
+        client = require_client(ctx)
+        return await client.list_users()
 
     @mcp.tool(
         tags={"write", "users", "user-mutation"},
         annotations={"readOnlyHint": False, "destructiveHint": False},
     )
+    @tool_error_boundary
     async def unraid_create_user(
         ctx: Context,
         name: str,
@@ -106,29 +105,24 @@ def register_user_tools(mcp: FastMCP) -> None:
                 ``UNRAID_NEW_USER_``). Mutually exclusive with ``password``.
             description: Optional description shown in the WebGUI.
         """
-        try:
-            client = require_user_mutation(ctx, "create user")
-            effective_password = _resolve_password(password, password_env_var)
-            return await client.create_user(
-                name=name,
-                password=effective_password,
-                description=description,
-            )
-        except Exception as e:
-            handle_client_error(e)
+        client = require_user_mutation(ctx, "create user")
+        effective_password = _resolve_password(password, password_env_var)
+        return await client.create_user(
+            name=name,
+            password=effective_password,
+            description=description,
+        )
 
     @mcp.tool(
         tags={"write", "users", "user-mutation"},
         annotations={"readOnlyHint": False, "destructiveHint": True},
     )
+    @tool_error_boundary
     async def unraid_delete_user(ctx: Context, name: str) -> dict[str, Any]:
         """Delete an Unraid user by name.
 
         Args:
             name: Username to delete.
         """
-        try:
-            client = require_user_mutation(ctx, "delete user")
-            return await client.delete_user(name)
-        except Exception as e:
-            handle_client_error(e)
+        client = require_user_mutation(ctx, "delete user")
+        return await client.delete_user(name)
