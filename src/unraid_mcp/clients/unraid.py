@@ -87,10 +87,14 @@ query DockerNetworks {
 }
 """
 
+# Verified against Unraid API 4.32.x — `VmDomain.uuid` does not exist; the
+# GraphQL schema uses `id: PrefixedID!`. `vms.domain` is retained for
+# backward compat but the canonical accessor is `vms.domains`.
 QUERY_VMS = """
 query Vms {
     vms {
-        domain { uuid name state }
+        id
+        domains { id name state }
     }
 }
 """
