@@ -129,40 +129,14 @@ class TestStartParityCheck:
         assert sent["variables"] == {"correct": False}
 
 
-class TestCreateUser:
+class TestGetMe:
     @respx.mock
-    async def test_create_user_with_description(self, client):
-        route = respx.post(GRAPHQL_URL).mock(
-            return_value=httpx.Response(
-                200,
-                json={"data": {"addUser": {"id": "u1", "name": "alice", "description": "Admin"}}},
-            )
-        )
-        await client.create_user(name="alice", password="hunter2", description="Admin")
-        sent = json.loads(route.calls[0].request.content)
-        assert sent["variables"]["input"]["name"] == "alice"
-        assert sent["variables"]["input"]["password"] == "hunter2"
-        assert sent["variables"]["input"]["description"] == "Admin"
-
-    @respx.mock
-    async def test_create_user_without_description_omits_field(self, client):
-        route = respx.post(GRAPHQL_URL).mock(
-            return_value=httpx.Response(200, json={"data": {"addUser": {"id": "u1", "name": "bob"}}})
-        )
-        await client.create_user(name="bob", password="hunter2")
-        sent = json.loads(route.calls[0].request.content)
-        assert "description" not in sent["variables"]["input"]
-
-
-class TestDeleteUser:
-    @respx.mock
-    async def test_delete_user_passes_name(self, client):
-        route = respx.post(GRAPHQL_URL).mock(
-            return_value=httpx.Response(200, json={"data": {"deleteUser": {"id": "u1", "name": "bob"}}})
-        )
-        await client.delete_user("bob")
-        sent = json.loads(route.calls[0].request.content)
-        assert sent["variables"]["input"] == {"name": "bob"}
+    async def test_get_me_returns_user_account_model(self, client):
+        me = {"id": "u1", "name": "alice", "description": "Admin", "roles": ["ADMIN", "CONNECT"]}
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"me": me}}))
+        result = await client.get_me()
+        assert result.name == "alice"
+        assert result.roles == ["ADMIN", "CONNECT"]
 
 
 class TestValidateConnection:

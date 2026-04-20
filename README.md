@@ -123,7 +123,9 @@ Then set env vars in the same shell, or use `claude mcp add unraid --env UNRAID_
 
 ### Enabling write tools
 
-The server starts in read-only mode by default. To expose the `start/stop/restart` family, set `UNRAID_MODE=readwrite` in the client's `env` block. To additionally expose `unraid_create_user` / `unraid_delete_user`, also set `UNRAID_ALLOW_USER_MUTATIONS=true` — these are double-gated because they modify OS-level accounts.
+The server starts in read-only mode by default. To expose the `start/stop/restart` family, set `UNRAID_MODE=readwrite` in the client's `env` block.
+
+> **Note**: Unraid 4.32+ removed `addUser` / `deleteUser` / `Query.users` from the GraphQL API, so `unraid-mcp` no longer exposes create/delete/list user tools. Self-introspection remains via `unraid_get_me` (read-only, returns the authenticated account's id, name, description, roles). Manage accounts through the Unraid WebGUI or the `unraid-api` CLI on the server.
 
 ## Running in Docker
 
@@ -178,8 +180,6 @@ See [.env.example](.env.example) for all configuration options.
 | `UNRAID_USE_HTTPS` | `true` | Use HTTPS (set false for plain HTTP) |
 | `UNRAID_API_KEY` | — | API key from Unraid WebGUI |
 | `UNRAID_VERIFY_SSL` | `false` | Verify TLS cert (false for self-signed) |
-| `UNRAID_ALLOW_USER_MUTATIONS` | `false` | Secondary switch for `unraid_create_user` / `unraid_delete_user`; even in `readwrite` mode these stay hidden unless this is `true` |
-| `UNRAID_NEW_USER_*` | — | When set, can be referenced via `password_env_var` on `unraid_create_user` so the password stays out of MCP transcripts. Name must start with `UNRAID_NEW_USER_`. |
 
 ## Development
 

@@ -112,9 +112,4 @@ def create_server(config: UnraidConfig | None = None) -> FastMCP:
     else:
         logger.info("Read-write mode: all tools enabled")
 
-    # Secondary gate: user-mutation tools stay hidden unless explicitly allowed
-    if not config.unraid_allow_user_mutations:
-        server.disable(tags={"user-mutation"})
-        logger.info("User-mutation tools disabled (UNRAID_ALLOW_USER_MUTATIONS=false)")
-
     return server

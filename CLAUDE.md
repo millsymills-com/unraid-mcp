@@ -67,8 +67,8 @@ src/unraid_mcp/
     ├── docker.py        # containers + networks, start/stop/restart/pause/unpause
     ├── vms.py           # list / start / stop / force_stop / pause / resume / reboot
     ├── shares.py        # list / get share
-    ├── users.py         # list / create / delete
-    └── notifications.py # list / archive / delete / archive_all
+    ├── notifications.py # list / archive / delete / archive_all
+    └── users.py         # get_me (Unraid API 4.32+ dropped create/delete/list)
 ```
 
 ## Conventions

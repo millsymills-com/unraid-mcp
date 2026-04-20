@@ -16,7 +16,7 @@ from unraid_mcp.models.docker import DockerContainer, DockerNetwork
 from unraid_mcp.models.notifications import Notification
 from unraid_mcp.models.shares import Share
 from unraid_mcp.models.system import SystemInfo
-from unraid_mcp.models.users import User
+from unraid_mcp.models.users import UserAccount
 from unraid_mcp.models.vms import Vms
 
 logger = logging.getLogger(__name__)
@@ -104,9 +104,11 @@ query Shares {
 }
 """
 
-QUERY_USERS = """
-query Users {
-    users { id name description roles password }
+# Verified against Unraid API 4.32+ schema — `Query.users` was removed.
+# Only self-introspection survives via `Query.me`.
+QUERY_ME = """
+query Me {
+    me { id name description roles }
 }
 """
 
@@ -230,17 +232,9 @@ MUTATION_ARCHIVE_ALL_NOTIFICATIONS = """
 mutation ArchiveAllNotifications { archiveAll { id } }
 """
 
-MUTATION_CREATE_USER = """
-mutation CreateUser($input: addUserInput!) {
-    addUser(input: $input) { id name description }
-}
-"""
-
-MUTATION_DELETE_USER = """
-mutation DeleteUser($input: deleteUserInput!) {
-    deleteUser(input: $input) { id name }
-}
-"""
+# NOTE: `addUser` and `deleteUser` mutations were dropped from the Unraid API
+# 4.32+ schema. If the operator needs to manage accounts they must use the
+# Unraid WebGUI or the `unraid-api` CLI on the server itself.
 
 
 class UnraidClient(BaseGraphQLClient):
@@ -303,13 +297,10 @@ class UnraidClient(BaseGraphQLClient):
             return []
         return [Share.model_validate(share) for share in shares]
 
-    async def list_users(self) -> list[User]:
-        """List Unraid users."""
-        result = await self.query(QUERY_USERS)
-        users = result.get("users") or []
-        if not isinstance(users, list):
-            return []
-        return [User.model_validate(user) for user in users]
+    async def get_me(self) -> UserAccount:
+        """Get the authenticated user account (the account the API key belongs to)."""
+        result = await self.query(QUERY_ME)
+        return UserAccount.model_validate(result.get("me") or {})
 
     async def list_notifications(self) -> list[Notification]:
         """List notifications."""
@@ -421,24 +412,6 @@ class UnraidClient(BaseGraphQLClient):
     async def archive_all_notifications(self) -> dict[str, Any]:
         """Archive all notifications."""
         return await self.mutate(MUTATION_ARCHIVE_ALL_NOTIFICATIONS)
-
-    # ── Write methods: users ────────────────────────────────────────────
-
-    async def create_user(
-        self,
-        name: str,
-        password: str,
-        description: str | None = None,
-    ) -> dict[str, Any]:
-        """Create an Unraid user."""
-        input_arg: dict[str, Any] = {"name": name, "password": password}
-        if description is not None:
-            input_arg["description"] = description
-        return await self.mutate(MUTATION_CREATE_USER, variables={"input": input_arg})
-
-    async def delete_user(self, name: str) -> dict[str, Any]:
-        """Delete an Unraid user by name."""
-        return await self.mutate(MUTATION_DELETE_USER, variables={"input": {"name": name}})
 
     # ── Lifecycle ───────────────────────────────────────────────────────
 

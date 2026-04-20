@@ -51,16 +51,6 @@ class TestApiEnabled:
         assert config.api_enabled is False
 
 
-class TestUserMutationsFlag:
-    def test_default_is_false(self):
-        config = UnraidConfig(_env_file=None)
-        assert config.unraid_allow_user_mutations is False
-
-    def test_true_enables(self):
-        config = UnraidConfig(_env_file=None, unraid_allow_user_mutations=True)
-        assert config.unraid_allow_user_mutations is True
-
-
 class TestDefaults:
     def test_default_host(self):
         config = UnraidConfig(_env_file=None)
