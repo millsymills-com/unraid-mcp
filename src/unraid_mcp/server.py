@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, TypedDict
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -17,12 +16,17 @@ from unraid_mcp.config import UnraidConfig
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class ServerContext:
-    """Lifespan context passed to all tools via ``ctx.lifespan_context``."""
+class ServerContext(TypedDict, total=False):
+    """Shape of the lifespan context passed to tools via ``ctx.lifespan_context``.
+
+    Yielded as a plain dict so FastMCP's lifespan-composition helper — which
+    merges results with ``{**left, **right}`` — and any future tightening of
+    the ``AsyncIterator[dict[str, Any]]`` contract keep working. Tools read
+    fields via ``ctx.lifespan_context["config"]`` / ``.get("client")``.
+    """
 
     config: UnraidConfig
-    client: object | None = None  # UnraidClient | None — typed loosely to avoid circular imports
+    client: Any  # UnraidClient | None — typed loosely to avoid circular imports
 
 
 def make_server_lifespan(config: UnraidConfig) -> Lifespan:
@@ -35,9 +39,9 @@ def make_server_lifespan(config: UnraidConfig) -> Lifespan:
     config.
     """
 
-    @lifespan  # type: ignore[arg-type]
-    async def _server_lifespan(_server: FastMCP) -> AsyncIterator[ServerContext]:
-        context = ServerContext(config=config)
+    @lifespan
+    async def _server_lifespan(_server: FastMCP) -> AsyncIterator[dict[str, Any]]:
+        context: dict[str, Any] = {"config": config, "client": None}
 
         # Lazily import the client to avoid circular deps at module load time
         from unraid_mcp.clients.unraid import UnraidClient
@@ -66,7 +70,7 @@ def make_server_lifespan(config: UnraidConfig) -> Lifespan:
                 )
                 await client.close()
             else:
-                context.client = client
+                context["client"] = client
                 logger.info("Unraid client initialized and validated")
         else:
             logger.warning("UNRAID_API_KEY not set — tools will return 'not configured' errors")
@@ -74,9 +78,10 @@ def make_server_lifespan(config: UnraidConfig) -> Lifespan:
         try:
             yield context
         finally:
-            if context.client is not None:
+            close_me = context.get("client")
+            if close_me is not None:
                 try:
-                    await context.client.close()  # type: ignore[attr-defined]
+                    await close_me.close()
                     logger.info("Closed Unraid client")
                 except Exception:
                     logger.exception("Error closing Unraid client")

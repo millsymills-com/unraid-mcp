@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 from unraid_mcp.config import UnraidConfig, UnraidMode
 from unraid_mcp.errors import UnraidConnectionError
-from unraid_mcp.server import ServerContext, create_server, make_server_lifespan
+from unraid_mcp.server import create_server, make_server_lifespan
 
 
 def _make_config(**overrides):
@@ -102,8 +102,10 @@ class TestLifespanValidation:
         with patch("unraid_mcp.clients.unraid.UnraidClient", return_value=mock_client):
             server = create_server(config)
             async with make_server_lifespan(config)(server) as context:
-                assert isinstance(context, ServerContext)
-                assert context.client is None
+                # Lifespan yields a plain dict (#67) so FastMCP's lifespan-composition
+                # helper can merge it with other lifespans.
+                assert isinstance(context, dict)
+                assert context.get("client") is None
 
         mock_client.close.assert_awaited_once()
 
@@ -115,7 +117,7 @@ class TestLifespanValidation:
         with patch("unraid_mcp.clients.unraid.UnraidClient", return_value=mock_client):
             server = create_server(config)
             async with make_server_lifespan(config)(server) as context:
-                assert context.client is mock_client
+                assert context["client"] is mock_client
 
         mock_client.close.assert_awaited_once()
 
@@ -123,17 +125,17 @@ class TestLifespanValidation:
         config = _make_config(unraid_api_key=None)
         server = create_server(config)
         async with make_server_lifespan(config)(server) as context:
-            assert context.client is None
+            assert context.get("client") is None
 
     async def test_lifespan_uses_explicit_config_over_env(self, monkeypatch):
-        # Regression test for #21: the config passed to create_server must
+        # Regression test for #21 / #66: the config passed to create_server must
         # be the one the lifespan uses, overriding any env vars.
         monkeypatch.setenv("UNRAID_API_KEY", "env-key-should-be-ignored")
         config = _make_config(unraid_api_key=None)  # explicit: no API key
         server = create_server(config)
         async with make_server_lifespan(config)(server) as context:
-            assert context.client is None
-            assert context.config.unraid_api_key is None
+            assert context.get("client") is None
+            assert context["config"].unraid_api_key is None
 
 
 class TestCreateUserSchema:
