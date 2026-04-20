@@ -138,96 +138,118 @@ query Connect {
 
 # ── Mutations ───────────────────────────────────────────────────────────
 
+# Verified against Unraid API 4.32.x — `startArray` / `stopArray` were removed
+# from the Mutation root; set the desired state via `array.setState` instead.
 MUTATION_START_ARRAY = """
-mutation StartArray { startArray { state } }
+mutation StartArray {
+    array { setState(input: { desiredState: START }) { state } }
+}
 """
 
 MUTATION_STOP_ARRAY = """
-mutation StopArray { stopArray { state } }
+mutation StopArray {
+    array { setState(input: { desiredState: STOP }) { state } }
+}
 """
 
+# Verified against Unraid API 4.32.x — parity mutations moved under
+# `parityCheck { start/pause/resume/cancel }` and return JSON (no selection set).
 MUTATION_START_PARITY_CHECK = """
 mutation StartParityCheck($correct: Boolean) {
-    startParityCheck(correct: $correct) { state }
+    parityCheck { start(correct: $correct) }
 }
 """
 
 MUTATION_PAUSE_PARITY_CHECK = """
-mutation PauseParityCheck { pauseParityCheck { state } }
+mutation PauseParityCheck { parityCheck { pause } }
 """
 
 MUTATION_RESUME_PARITY_CHECK = """
-mutation ResumeParityCheck { resumeParityCheck { state } }
+mutation ResumeParityCheck { parityCheck { resume } }
 """
 
 MUTATION_CANCEL_PARITY_CHECK = """
-mutation CancelParityCheck { cancelParityCheck { state } }
+mutation CancelParityCheck { parityCheck { cancel } }
 """
 
+# Verified against Unraid API 4.32.x — Docker mutations take `PrefixedID!`
+# (not `ID!`) and the server no longer exposes `docker.restart`. The
+# restart tool is implemented client-side as stop → start.
 MUTATION_START_CONTAINER = """
-mutation StartContainer($id: ID!) {
+mutation StartContainer($id: PrefixedID!) {
     docker { start(id: $id) { id state status } }
 }
 """
 
 MUTATION_STOP_CONTAINER = """
-mutation StopContainer($id: ID!) {
+mutation StopContainer($id: PrefixedID!) {
     docker { stop(id: $id) { id state status } }
 }
 """
 
-MUTATION_RESTART_CONTAINER = """
-mutation RestartContainer($id: ID!) {
-    docker { restart(id: $id) { id state status } }
-}
-"""
-
 MUTATION_PAUSE_CONTAINER = """
-mutation PauseContainer($id: ID!) {
+mutation PauseContainer($id: PrefixedID!) {
     docker { pause(id: $id) { id state status } }
 }
 """
 
 MUTATION_UNPAUSE_CONTAINER = """
-mutation UnpauseContainer($id: ID!) {
+mutation UnpauseContainer($id: PrefixedID!) {
     docker { unpause(id: $id) { id state status } }
 }
 """
 
+# Verified against Unraid API 4.32.x — VM mutations take `PrefixedID!` and
+# return plain `Boolean!` (no selection set is valid).
 MUTATION_START_VM = """
-mutation StartVm($id: ID!) { vm { start(id: $id) { uuid name state } } }
+mutation StartVm($id: PrefixedID!) { vm { start(id: $id) } }
 """
 
 MUTATION_STOP_VM = """
-mutation StopVm($id: ID!) { vm { stop(id: $id) { uuid name state } } }
+mutation StopVm($id: PrefixedID!) { vm { stop(id: $id) } }
 """
 
 MUTATION_PAUSE_VM = """
-mutation PauseVm($id: ID!) { vm { pause(id: $id) { uuid name state } } }
+mutation PauseVm($id: PrefixedID!) { vm { pause(id: $id) } }
 """
 
 MUTATION_RESUME_VM = """
-mutation ResumeVm($id: ID!) { vm { resume(id: $id) { uuid name state } } }
+mutation ResumeVm($id: PrefixedID!) { vm { resume(id: $id) } }
 """
 
 MUTATION_REBOOT_VM = """
-mutation RebootVm($id: ID!) { vm { reboot(id: $id) { uuid name state } } }
+mutation RebootVm($id: PrefixedID!) { vm { reboot(id: $id) } }
 """
 
 MUTATION_FORCE_STOP_VM = """
-mutation ForceStopVm($id: ID!) { vm { forceStop(id: $id) { uuid name state } } }
+mutation ForceStopVm($id: PrefixedID!) { vm { forceStop(id: $id) } }
 """
 
+# Verified against Unraid API 4.32.x — notification IDs are `PrefixedID!`,
+# `deleteNotification` also requires a `type: NotificationType!` argument,
+# and responses are `Notification` (archive) / `NotificationOverview`
+# (delete, archiveAll). `NotificationOverview` has no `id`; we select the
+# counts instead.
 MUTATION_ARCHIVE_NOTIFICATION = """
-mutation ArchiveNotification($id: ID!) { archiveNotification(id: $id) { id } }
+mutation ArchiveNotification($id: PrefixedID!) {
+    archiveNotification(id: $id) { id title importance timestamp }
+}
 """
 
 MUTATION_DELETE_NOTIFICATION = """
-mutation DeleteNotification($id: ID!) { deleteNotification(id: $id) { id } }
+mutation DeleteNotification($id: PrefixedID!, $type: NotificationType!) {
+    deleteNotification(id: $id, type: $type) {
+        unread { total } archive { total }
+    }
+}
 """
 
 MUTATION_ARCHIVE_ALL_NOTIFICATIONS = """
-mutation ArchiveAllNotifications { archiveAll { id } }
+mutation ArchiveAllNotifications($importance: NotificationImportance) {
+    archiveAll(importance: $importance) {
+        unread { total } archive { total }
+    }
+}
 """
 
 MUTATION_CREATE_USER = """
@@ -371,8 +393,13 @@ class UnraidClient(BaseGraphQLClient):
         return await self.mutate(MUTATION_STOP_CONTAINER, variables={"id": container_id})
 
     async def restart_container(self, container_id: str) -> dict[str, Any]:
-        """Restart a Docker container by ID."""
-        return await self.mutate(MUTATION_RESTART_CONTAINER, variables={"id": container_id})
+        """Restart a Docker container by ID.
+
+        The Unraid API 4.32+ schema no longer exposes a server-side ``restart``
+        mutation, so this is implemented client-side as ``stop`` + ``start``.
+        """
+        await self.mutate(MUTATION_STOP_CONTAINER, variables={"id": container_id})
+        return await self.mutate(MUTATION_START_CONTAINER, variables={"id": container_id})
 
     async def pause_container(self, container_id: str) -> dict[str, Any]:
         """Pause a Docker container by ID."""
@@ -414,13 +441,27 @@ class UnraidClient(BaseGraphQLClient):
         """Archive a notification by ID."""
         return await self.mutate(MUTATION_ARCHIVE_NOTIFICATION, variables={"id": notification_id})
 
-    async def delete_notification(self, notification_id: str) -> dict[str, Any]:
-        """Delete a notification by ID."""
-        return await self.mutate(MUTATION_DELETE_NOTIFICATION, variables={"id": notification_id})
+    async def delete_notification(
+        self,
+        notification_id: str,
+        notification_type: str = "UNREAD",
+    ) -> dict[str, Any]:
+        """Delete a notification.
 
-    async def archive_all_notifications(self) -> dict[str, Any]:
-        """Archive all notifications."""
-        return await self.mutate(MUTATION_ARCHIVE_ALL_NOTIFICATIONS)
+        The Unraid API 4.32+ schema requires both the id and the bin
+        (``UNREAD`` or ``ARCHIVE``) so it knows which counter to decrement.
+        """
+        return await self.mutate(
+            MUTATION_DELETE_NOTIFICATION,
+            variables={"id": notification_id, "type": notification_type},
+        )
+
+    async def archive_all_notifications(self, importance: str | None = None) -> dict[str, Any]:
+        """Archive all notifications, optionally filtered by importance level."""
+        return await self.mutate(
+            MUTATION_ARCHIVE_ALL_NOTIFICATIONS,
+            variables={"importance": importance},
+        )
 
     # ── Write methods: users ────────────────────────────────────────────
 

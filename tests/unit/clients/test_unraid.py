@@ -85,14 +85,25 @@ class TestListVms:
 
 class TestStartArray:
     @respx.mock
-    async def test_start_array_sends_mutation(self, client):
+    async def test_start_array_uses_set_state_mutation(self, client):
         route = respx.post(GRAPHQL_URL).mock(
-            return_value=httpx.Response(200, json={"data": {"startArray": {"state": "STARTED"}}})
+            return_value=httpx.Response(200, json={"data": {"array": {"setState": {"state": "STARTED"}}}}),
         )
         result = await client.start_array()
-        assert result == {"startArray": {"state": "STARTED"}}
+        assert result == {"array": {"setState": {"state": "STARTED"}}}
         sent = json.loads(route.calls[0].request.content)
-        assert "startArray" in sent["query"]
+        assert "array" in sent["query"]
+        assert "setState" in sent["query"]
+        assert "desiredState: START" in sent["query"]
+
+    @respx.mock
+    async def test_stop_array_uses_set_state_mutation(self, client):
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(200, json={"data": {"array": {"setState": {"state": "STOPPED"}}}}),
+        )
+        await client.stop_array()
+        sent = json.loads(route.calls[0].request.content)
+        assert "desiredState: STOP" in sent["query"]
 
 
 class TestStartContainer:
@@ -107,22 +118,41 @@ class TestStartContainer:
         await client.start_container("abc")
         sent = json.loads(route.calls[0].request.content)
         assert sent["variables"] == {"id": "abc"}
+        # PrefixedID (not ID) — regression guard for #59.
+        assert "$id: PrefixedID!" in sent["query"]
+
+
+class TestRestartContainer:
+    @respx.mock
+    async def test_restart_issues_stop_then_start(self, client):
+        # restart_container is implemented client-side as stop → start since the
+        # Unraid API 4.32+ schema no longer exposes a server-side restart mutation.
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(200, json={"data": {"docker": {"stop": {"id": "abc"}}}}),
+        )
+        await client.restart_container("abc")
+        assert route.call_count == 2
+        sent0 = json.loads(route.calls[0].request.content)
+        sent1 = json.loads(route.calls[1].request.content)
+        assert "StopContainer" in sent0["query"]
+        assert "StartContainer" in sent1["query"]
 
 
 class TestStartParityCheck:
     @respx.mock
     async def test_start_parity_check_passes_correct_variable(self, client):
         route = respx.post(GRAPHQL_URL).mock(
-            return_value=httpx.Response(200, json={"data": {"startParityCheck": {"state": "RUNNING"}}})
+            return_value=httpx.Response(200, json={"data": {"parityCheck": {"start": {"running": True}}}}),
         )
         await client.start_parity_check(correct=True)
         sent = json.loads(route.calls[0].request.content)
         assert sent["variables"] == {"correct": True}
+        assert "parityCheck { start(correct: $correct) }" in sent["query"]
 
     @respx.mock
     async def test_start_parity_check_defaults_to_false(self, client):
         route = respx.post(GRAPHQL_URL).mock(
-            return_value=httpx.Response(200, json={"data": {"startParityCheck": {"state": "RUNNING"}}})
+            return_value=httpx.Response(200, json={"data": {"parityCheck": {"start": {"running": True}}}}),
         )
         await client.start_parity_check()
         sent = json.loads(route.calls[0].request.content)

@@ -37,23 +37,38 @@ def register_notification_tools(mcp: FastMCP) -> None:
             handle_client_error(e)
 
     @mcp.tool(tags={"write", "notifications"}, annotations={"readOnlyHint": False, "destructiveHint": True})
-    async def unraid_delete_notification(ctx: Context, notification_id: str) -> dict[str, Any]:
-        """Permanently delete a notification by ID.
+    async def unraid_delete_notification(
+        ctx: Context,
+        notification_id: str,
+        notification_type: str = "UNREAD",
+    ) -> dict[str, Any]:
+        """Permanently delete a notification.
 
         Args:
             notification_id: Notification ID.
+            notification_type: Which bin the notification lives in —
+                ``UNREAD`` (default) or ``ARCHIVE``.
         """
         try:
             client = require_readwrite(ctx, "delete notification")
-            return await client.delete_notification(notification_id)
+            return await client.delete_notification(notification_id, notification_type=notification_type)
         except Exception as e:
             handle_client_error(e)
 
     @mcp.tool(tags={"write", "notifications"}, annotations={"readOnlyHint": False, "destructiveHint": True})
-    async def unraid_archive_all_notifications(ctx: Context) -> dict[str, Any]:
-        """Archive all active notifications."""
+    async def unraid_archive_all_notifications(
+        ctx: Context,
+        importance: str | None = None,
+    ) -> dict[str, Any]:
+        """Archive all active notifications.
+
+        Args:
+            importance: Optional filter — only archive notifications at or
+                above this importance (``INFO``, ``WARNING``, or ``ALERT``).
+                When ``None``, archives all.
+        """
         try:
             client = require_readwrite(ctx, "archive all notifications")
-            return await client.archive_all_notifications()
+            return await client.archive_all_notifications(importance=importance)
         except Exception as e:
             handle_client_error(e)
