@@ -125,6 +125,47 @@ Then set env vars in the same shell, or use `claude mcp add unraid --env UNRAID_
 
 The server starts in read-only mode by default. To expose the `start/stop/restart` family, set `UNRAID_MODE=readwrite` in the client's `env` block. To additionally expose `unraid_create_user` / `unraid_delete_user`, also set `UNRAID_ALLOW_USER_MUTATIONS=true` — these are double-gated because they modify OS-level accounts.
 
+## Running in Docker
+
+A [`Dockerfile`](Dockerfile) is included for operators who prefer containerized deployment. Build with:
+
+```bash
+docker build -t unraid-mcp:latest .
+```
+
+Because MCP is a stdio protocol, the container is meant to be launched *per MCP session* — the client spawns `docker run -i` on demand. Example Claude Desktop config pointing at the container:
+
+```jsonc
+{
+  "mcpServers": {
+    "unraid": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "UNRAID_HOST",
+        "-e", "UNRAID_API_KEY",
+        "-e", "UNRAID_MODE",
+        "unraid-mcp:latest"
+      ],
+      "env": {
+        "UNRAID_HOST": "tower.local",
+        "UNRAID_API_KEY": "your-key-here",
+        "UNRAID_MODE": "readonly"
+      }
+    }
+  }
+}
+```
+
+Run `--check-config` against the built image the same way:
+
+```bash
+docker run -i --rm \
+    -e UNRAID_HOST=tower.local \
+    -e UNRAID_API_KEY=your-key \
+    unraid-mcp:latest --check-config
+```
+
 ## Configuration
 
 See [.env.example](.env.example) for all configuration options.
