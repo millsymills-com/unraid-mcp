@@ -52,3 +52,6 @@ Thumbs.db
 
 # Hatch
 /.hatch/
+
+# Hypothesis property-test database
+.hypothesis/
