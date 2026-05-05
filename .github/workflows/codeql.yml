@@ -1,0 +1,47 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly on Monday at 05:30 UTC — offset from the security workflow
+    # so an introspection breakage doesn't take both runs out at once.
+    - cron: "30 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      security-events: write
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Python is interpreted, so build-mode: none lets CodeQL extract
+          # without trying to invoke a build system.
+          - language: python
+            build-mode: none
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@14c9a0cbe6373488c2a41f7e75c8dd142bb2aba8 # v3.35.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@14c9a0cbe6373488c2a41f7e75c8dd142bb2aba8 # v3.35.3
+        with:
+          category: "/language:${{ matrix.language }}"
