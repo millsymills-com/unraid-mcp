@@ -1,11 +1,13 @@
 version: 2
 updates:
-  # Python dependencies
-  - package-ecosystem: "pip"
+  # Python dependencies — uv ecosystem so uv.lock gets updated.
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
+    cooldown:
+      default-days: 7
     labels:
       - "dependencies"
     commit-message:
@@ -20,6 +22,7 @@ updates:
           - "bandit*"
           - "respx"
           - "pre-commit"
+          - "hypothesis"
         update-types:
           - "minor"
           - "patch"
@@ -30,9 +33,26 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    cooldown:
+      default-days: 7
     labels:
       - "ci"
       - "dependencies"
     commit-message:
       prefix: "ci"
+    open-pull-requests-limit: 5
+
+  # Docker base images (Dockerfile)
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+    labels:
+      - "ci"
+      - "dependencies"
+    commit-message:
+      prefix: "deps"
     open-pull-requests-limit: 5

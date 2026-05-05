@@ -50,8 +50,9 @@ against a real Unraid server, with breaking-change detection at PR time."
 
 ## Constraints
 
-- Live tests target the user's production tower (`resurgent.local`). Reads are
-  always safe; writes are gated and limited to `mcptest_*`-prefixed assets.
+- Live tests target the operator's production tower (configured via
+  `UNRAID_HOST`). Reads are always safe; writes are gated and limited to
+  `mcptest_*`-prefixed assets.
 - Unraid GraphQL has no `docker create` or `vm create` mutations, so test
   containers and VMs cannot be created by tests. They are set up once by the
   user via the Unraid UI; fixtures auto-discover them and skip cleanly when
@@ -394,7 +395,7 @@ Narrow and explicit. No blanket `@pytest.mark.flaky`.
 Every fixture skip/fail message answers "what do I do next?" in one line.
 
 - Bad: `skipping: env not set`
-- Good: `skipping live_write: set UNRAID_ALLOW_LIVE_WRITES=1 to enable (writes against https://resurgent.local)`
+- Good: `skipping live_write: set UNRAID_ALLOW_LIVE_WRITES=1 to enable (writes against https://$UNRAID_HOST)`
 - Bad: `mcptest-container not found`
 - Good: `skipping docker write tests: create container named mcptest-* on tower (Docker tab → Add Container, image=nginx:alpine)`
 

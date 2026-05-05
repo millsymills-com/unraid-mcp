@@ -55,3 +55,7 @@ Thumbs.db
 
 # Hypothesis property-test database
 .hypothesis/
+
+# Claude Code workspace settings (may include local hostnames / API keys
+# pasted into Bash() permission allowlists)
+.claude/

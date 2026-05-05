@@ -14,8 +14,9 @@ ARG PYTHON_VERSION=3.13
 FROM python:${PYTHON_VERSION}-slim AS base
 
 # uv provides fast, reproducible dep resolution and pulls the pinned
-# versions from uv.lock.
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+# versions from uv.lock. Pinned to an explicit tag so image rebuilds
+# stay reproducible (Dependabot keeps this current).
+COPY --from=ghcr.io/astral-sh/uv:0.11.9 /uv /uvx /usr/local/bin/
 
 # Run as a non-root user so the container doesn't need to bind to a
 # privileged uid. Unraid typically maps container uids to its own
