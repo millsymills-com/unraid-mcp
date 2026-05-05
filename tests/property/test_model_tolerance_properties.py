@@ -61,9 +61,15 @@ _JSON_VALUES = st.one_of(
 def test_unknown_fields_tolerated_and_known_round_trips(
     model_cls: type, field: str, value: object, extras: dict[str, object]
 ) -> None:
-    """Arbitrary extras don't crash validation; the known field survives."""
-    extras.pop(field, None)
-    extras.pop(to_camel(field), None)
+    """Arbitrary extras don't crash validation; the known field survives.
+
+    Strip any extra key that collides with a real model field (snake_case
+    or camelCase alias) — those would route through validation and fail
+    on type mismatches like `imageId=False` against `image_id: str | None`,
+    which is correct pydantic behavior, not a tolerance violation.
+    """
+    known_keys = set(model_cls.model_fields) | {to_camel(name) for name in model_cls.model_fields}
+    extras = {k: v for k, v in extras.items() if k not in known_keys}
 
     payload = {**extras, field: value}
     instance = model_cls.model_validate(payload)
