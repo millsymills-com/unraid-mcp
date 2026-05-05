@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/logo-8bit.png" alt="unraid-mcp" width="480">
+</p>
+
 # unraid-mcp
 
 Production-grade Python MCP server for the Unraid GraphQL API.
