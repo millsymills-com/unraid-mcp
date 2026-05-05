@@ -37,17 +37,6 @@ For security-sensitive changes also run:
 uv run bandit -r src/unraid_mcp/ -c pyproject.toml
 ```
 
-For release-shaped changes (packaging, entry point, dependency versions) run the wheel smoke:
-
-```bash
-bash scripts/smoke_install.sh
-```
-
-It runs `uv build`, installs the wheel into a clean venv, and exercises
-`unraid-mcp --version`, `--help`, and `--check-config` to catch
-packaging and entry-point regressions the in-repo test suite doesn't.
-Requires `python3`, `unzip`, and a working `uv` on `PATH`.
-
 ## Coding Standards
 
 - **Python >=3.11**, strict `mypy`, `ruff` for lint and format.
@@ -76,10 +65,6 @@ Requires `python3`, `unzip`, and a working `uv` on `PATH`.
 - Keep PRs small where possible. Large refactors are easier to review when split into sequenced commits.
 - Reference the relevant plan, issue, or requirement ID in the PR body when it applies.
 - Add a one-line entry under `[Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md) for any user-visible change (new tool, new env var, new error mapping, behavior change, security fix). Internal refactors that don't change behavior or surface area can be skipped.
-
-## Releases
-
-Releases are cut by tagging `v*` on `main`. CI builds with `uv build`, publishes to TestPyPI, and then promotes to PyPI via trusted publishing. Maintainers own the tag step — contributors should not tag releases directly.
 
 ## Reporting Security Issues
 

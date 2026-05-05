@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+- PyPI release pipeline (`.github/workflows/release.yml`) and the
+  associated `scripts/smoke_install.sh` wheel smoke. The `unraid-mcp`
+  name on PyPI is owned by an unrelated project; this fork is
+  distributed source-only via this GitHub repo. Install via
+  `uv pip install git+https://github.com/millsmillsymills/unraid-mcp.git`
+  or build the Docker image locally.
+
 ### Added
 - `py.typed` marker so consumers installing the wheel pick up the package's
   type information (#9).

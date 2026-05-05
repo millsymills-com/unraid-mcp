@@ -7,7 +7,7 @@
 
 ## Problem
 
-`unraid-mcp` ships to PyPI with a 183-test unit suite plus a small read-only
+`unraid-mcp` is distributed source-only with a 183-test unit suite plus a small read-only
 integration suite, an 80% coverage gate, and a one-shot `tests/integration_live.py`
 probe. Gaps that block higher confidence:
 

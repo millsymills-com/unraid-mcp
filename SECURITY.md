@@ -14,9 +14,8 @@ timeline and disclosure date will be coordinated with you.
 In scope:
 
 - Code in `src/unraid_mcp/`
-- The published `unraid-mcp` PyPI package
-- The published Docker image
-- CI / release workflows in `.github/workflows/`
+- The repository's `Dockerfile` (and any image you build from it)
+- CI workflows in `.github/workflows/`
 
 Out of scope (report upstream instead):
 

@@ -16,13 +16,13 @@ Production-grade Python MCP server for the Unraid GraphQL API.
 ## Quick Start
 
 ```bash
-# Install from PyPI (once published)
-uv pip install unraid-mcp
-
-# Or install from source
+# Install from source
 git clone https://github.com/millsmillsymills/unraid-mcp.git
 cd unraid-mcp
 uv sync
+
+# Or, install directly from git into another project's venv
+uv pip install git+https://github.com/millsmillsymills/unraid-mcp.git
 
 # Configure
 cp .env.example .env
