@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Production-grade Python MCP server for the Unraid GraphQL API. Published to PyPI as `unraid-mcp`. Uses FastMCP framework with declarative read/write mode separation. Talks to a single GraphQL endpoint at `https://{host}:{port}/graphql` authenticated by `x-api-key`.
+Production-grade Python MCP server for the Unraid GraphQL API. Distributed source-only via this GitHub repo; install with `uv pip install git+https://github.com/millsmillsymills/unraid-mcp.git`. Uses FastMCP framework with declarative read/write mode separation. Talks to a single GraphQL endpoint at `https://{host}:{port}/graphql` authenticated by `x-api-key`.
 
 ## Commands
 
@@ -115,6 +115,5 @@ result = await client.mutate(MUTATION_START_CONTAINER, variables={"id": containe
 ## CI/CD
 
 - **CI**: Runs on push to main and PRs. Lint (ruff) + typecheck (mypy) on Python 3.13; test (pytest) across Python 3.11-3.13
-- **Release**: Triggered by `v*` tags. Builds with `uv build` (hatchling backend), publishes to TestPyPI then PyPI via trusted publishing
 - **Security**: Weekly Bandit scans + dependency review on PRs
-- **Dependabot**: Weekly updates for Python deps and GitHub Actions
+- **Dependabot**: Weekly updates for Python deps (uv ecosystem), GitHub Actions, and Docker base images
