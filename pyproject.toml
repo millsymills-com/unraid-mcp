@@ -159,7 +159,12 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 asyncio_mode = "auto"
 markers = [
-    "integration: marks tests that require a live Unraid server (deselect with '-m \"not integration\"')",
+    "integration: live read tests against a real Unraid server (set UNRAID_API_KEY)",
+    "live_write: live mutating tests; requires UNRAID_API_KEY + UNRAID_ALLOW_LIVE_WRITES=1",
+    "e2e: end-to-end MCP stdio transport tests (uses mock GraphQL endpoint)",
+    "contract: GraphQL schema contract tests",
+    "requires_live: schema drift test that needs a live UNRAID_API_KEY (subset of contract)",
+    "property: hypothesis-based property tests on pure functions",
     "slow: marks tests that are slow to run",
 ]
 addopts = [
@@ -167,6 +172,11 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "-x",
+    # Default run = unit + property + e2e + non-live contract tests.
+    # Live tiers (`integration`, `live_write`, `requires_live`) are
+    # opt-in; CI never has the env to run them.
+    "-m",
+    "not integration and not live_write and not requires_live",
 ]
 filterwarnings = [
     "error",
