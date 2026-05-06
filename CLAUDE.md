@@ -117,3 +117,14 @@ result = await client.mutate(MUTATION_START_CONTAINER, variables={"id": containe
 - **CI**: Runs on push to main and PRs. Lint (ruff) + typecheck (ty) + test (pytest) on Python 3.13.
 - **Security**: Weekly Bandit scans + dependency review on PRs
 - **Dependabot**: Weekly updates for Python deps (uv ecosystem), GitHub Actions, and Docker base images
+
+## Canonical MCP standards
+
+Authoritative source: `~/Desktop/Projects/consistency-check/docs/standards/`. This repo is graded against `mcp.md` + the language-specific file (`python.md` for Python repos, `go.md` for Go) + `mcp-protocol.md`.
+
+Run the audit:
+
+```bash
+cd ~/Desktop/Projects/consistency-check
+uv run consistency-check audit --repo $(basename "$PWD")
+```
