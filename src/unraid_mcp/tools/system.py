@@ -16,7 +16,14 @@ def register_system_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(tags={"system"})
     async def unraid_get_info(ctx: Context) -> SystemInfo:
-        """Get system information: OS, CPU, memory, baseboard, and component versions."""
+        """Get system information: OS, CPU, memory, baseboard, and component versions.
+
+        Args:
+            ctx: FastMCP request context.
+
+        Returns:
+            ``SystemInfo`` model with OS / CPU / memory / baseboard fields.
+        """
         try:
             client = require_client(ctx)
             return await client.get_info()
@@ -25,7 +32,14 @@ def register_system_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(tags={"system"})
     async def unraid_get_flash(ctx: Context) -> dict[str, Any]:
-        """Get Unraid USB flash drive metadata (GUID, vendor, product)."""
+        """Get Unraid USB flash drive metadata (GUID, vendor, product).
+
+        Args:
+            ctx: FastMCP request context.
+
+        Returns:
+            Dict of flash metadata keyed by GraphQL field name.
+        """
         try:
             client = require_client(ctx)
             return await client.get_flash()
@@ -34,7 +48,14 @@ def register_system_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(tags={"system"})
     async def unraid_get_registration(ctx: Context) -> dict[str, Any]:
-        """Get Unraid registration: license type, expiration, update entitlement."""
+        """Get Unraid registration: license type, expiration, update entitlement.
+
+        Args:
+            ctx: FastMCP request context.
+
+        Returns:
+            Dict of registration fields keyed by GraphQL field name.
+        """
         try:
             client = require_client(ctx)
             return await client.get_registration()
@@ -43,7 +64,14 @@ def register_system_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(tags={"system"})
     async def unraid_get_connect(ctx: Context) -> dict[str, Any]:
-        """Get Unraid Connect remote-access configuration."""
+        """Get Unraid Connect remote-access configuration.
+
+        Args:
+            ctx: FastMCP request context.
+
+        Returns:
+            Dict of Unraid Connect configuration fields keyed by GraphQL field name.
+        """
         try:
             client = require_client(ctx)
             return await client.get_connect()

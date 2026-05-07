@@ -14,7 +14,14 @@ def register_disk_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(tags={"disks"})
     async def unraid_list_disks(ctx: Context) -> list[Disk]:
-        """List all physical disks attached to the system, with SMART status and basic info."""
+        """List all physical disks attached to the system, with SMART status and basic info.
+
+        Args:
+            ctx: FastMCP request context.
+
+        Returns:
+            List of ``Disk`` models, one per attached physical disk.
+        """
         try:
             client = require_client(ctx)
             return await client.list_disks()
@@ -26,7 +33,11 @@ def register_disk_tools(mcp: FastMCP) -> None:
         """Get detailed info for a specific disk by ID.
 
         Args:
+            ctx: FastMCP request context.
             disk_id: Disk identifier (typically the device serial or Unraid-assigned ID).
+
+        Returns:
+            ``Disk`` model for the matching disk.
         """
         try:
             client = require_client(ctx)
