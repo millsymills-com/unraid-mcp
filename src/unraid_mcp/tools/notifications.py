@@ -16,7 +16,14 @@ def register_notification_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(tags={"notifications"})
     async def unraid_list_notifications(ctx: Context) -> list[Notification]:
-        """List active notifications (id, type, title, importance, timestamp)."""
+        """List active notifications (id, type, title, importance, timestamp).
+
+        Args:
+            ctx: FastMCP request context.
+
+        Returns:
+            List of ``Notification`` models, one per active notification.
+        """
         try:
             client = require_client(ctx)
             return await client.list_notifications()
@@ -28,7 +35,11 @@ def register_notification_tools(mcp: FastMCP) -> None:
         """Archive a notification by ID (move out of the active list).
 
         Args:
+            ctx: FastMCP request context.
             notification_id: Notification ID.
+
+        Returns:
+            Raw GraphQL mutation response payload.
         """
         try:
             client = require_readwrite(ctx, "archive notification")
@@ -41,7 +52,11 @@ def register_notification_tools(mcp: FastMCP) -> None:
         """Permanently delete a notification by ID.
 
         Args:
+            ctx: FastMCP request context.
             notification_id: Notification ID.
+
+        Returns:
+            Raw GraphQL mutation response payload.
         """
         try:
             client = require_readwrite(ctx, "delete notification")
@@ -51,7 +66,14 @@ def register_notification_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(tags={"write", "notifications"}, annotations={"readOnlyHint": False, "destructiveHint": True})
     async def unraid_archive_all_notifications(ctx: Context) -> dict[str, Any]:
-        """Archive all active notifications."""
+        """Archive all active notifications.
+
+        Args:
+            ctx: FastMCP request context.
+
+        Returns:
+            Raw GraphQL mutation response payload.
+        """
         try:
             client = require_readwrite(ctx, "archive all notifications")
             return await client.archive_all_notifications()

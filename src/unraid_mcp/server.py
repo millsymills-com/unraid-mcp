@@ -91,7 +91,10 @@ def make_server_lifespan(config: UnraidConfig) -> Lifespan:
                     else:
                         logger.info("Schema compatibility check passed")
         else:
-            logger.warning("UNRAID_API_KEY not set — tools will return 'not configured' errors")
+            logger.warning(
+                "Unraid API credentials not configured — tools will return "
+                "'not configured' errors. See README for required environment variables.",
+            )
 
         try:
             yield context
@@ -127,8 +130,8 @@ def create_server(config: UnraidConfig | None = None) -> FastMCP:
 
     register_all_tools(server)
 
-    # Apply mode gating — hide write tools in readonly mode
-    if not config.is_readwrite:
+    # Apply mode gating — hide write tools when the env-flag write-gate is off.
+    if not config.enable_write_tools:
         server.disable(tags={"write"})
         logger.info("Read-only mode: write tools disabled")
     else:
