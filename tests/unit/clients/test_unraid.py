@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 import httpx
 import pytest
@@ -145,16 +146,41 @@ class TestListUsers:
     async def test_list_users_query_does_not_request_password(self, client):
         # Regression for #107: never select User.password — it returns the
         # /etc/shadow hash and would land in MCP transcripts and logs.
+        # Word-boundary regex so a future legitimate `passwordExpiry` field
+        # would not falsely flag this assertion (#132).
         route = respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"users": []}}))
         await client.list_users()
         sent = json.loads(route.calls[0].request.content)
-        assert "password" not in sent["query"]
+        assert not re.search(r"\bpassword\b", sent["query"])
 
     def test_user_model_has_no_password_field(self):
         # Regression for #107: even if the upstream schema starts pushing
         # `password` unsolicited, the declared model must not name it as a
         # field — this prevents accidental .password access in tools.
         assert "password" not in User.model_fields
+
+    def test_user_model_drops_server_pushed_password(self):
+        # Regression for #132: even if the Unraid server pushes `password`
+        # unsolicited, `User` overrides the base `extra="allow"` to
+        # `extra="ignore"` so the field is dropped before it reaches
+        # `model_dump()` and the MCP tool response.
+        instance = User.model_validate({"id": "u1", "name": "root", "roles": "admin", "password": "$6$shadow_hash"})
+        assert "password" not in instance.model_dump()
+        assert not hasattr(instance, "password")
+        assert instance.model_extra == {} or instance.model_extra is None
+
+    @respx.mock
+    async def test_list_users_strips_server_pushed_password_end_to_end(self, client):
+        # Regression for #132: simulate the Unraid API pushing `password`
+        # unsolicited and assert it does not appear in the model_dump of
+        # the value `unraid_list_users` returns to FastMCP.
+        users = [
+            {"id": "u1", "name": "root", "roles": "admin", "password": "$6$shadow_hash"},
+        ]
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"users": users}}))
+        result = await client.list_users()
+        dumped = [u.model_dump() for u in result]
+        assert all("password" not in u for u in dumped)
 
 
 class TestCreateUser:
