@@ -16,7 +16,14 @@ def register_array_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(tags={"array"})
     async def unraid_get_array(ctx: Context) -> ArrayState:
-        """Get array status, capacity, parity disks, data disks, and cache disks."""
+        """Get array status, capacity, parity disks, data disks, and cache disks.
+
+        Args:
+            ctx: FastMCP request context.
+
+        Returns:
+            ``ArrayState`` model describing the current array layout and status.
+        """
         try:
             client = require_client(ctx)
             return await client.get_array()
@@ -25,7 +32,14 @@ def register_array_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(tags={"write", "array"}, annotations={"readOnlyHint": False, "destructiveHint": False})
     async def unraid_start_array(ctx: Context) -> dict[str, Any]:
-        """Start the Unraid array."""
+        """Start the Unraid array.
+
+        Args:
+            ctx: FastMCP request context.
+
+        Returns:
+            Raw GraphQL mutation response payload.
+        """
         try:
             client = require_readwrite(ctx, "start array")
             return await client.start_array()
@@ -34,7 +48,14 @@ def register_array_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(tags={"write", "array"}, annotations={"readOnlyHint": False, "destructiveHint": True})
     async def unraid_stop_array(ctx: Context) -> dict[str, Any]:
-        """Stop the Unraid array (will unmount shares and stop Docker/VMs)."""
+        """Stop the Unraid array (will unmount shares and stop Docker/VMs).
+
+        Args:
+            ctx: FastMCP request context.
+
+        Returns:
+            Raw GraphQL mutation response payload.
+        """
         try:
             client = require_readwrite(ctx, "stop array")
             return await client.stop_array()

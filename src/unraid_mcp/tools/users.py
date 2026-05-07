@@ -48,7 +48,14 @@ def register_user_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(tags={"users"})
     async def unraid_list_users(ctx: Context) -> list[User]:
-        """List Unraid users (id, name, description, roles)."""
+        """List Unraid users (id, name, description, roles).
+
+        Args:
+            ctx: FastMCP request context.
+
+        Returns:
+            List of ``User`` models, one per Unraid account.
+        """
         try:
             client = require_client(ctx)
             return await client.list_users()
@@ -125,7 +132,11 @@ def register_user_tools(mcp: FastMCP) -> None:
         """Delete an Unraid user by name.
 
         Args:
+            ctx: FastMCP request context.
             name: Username to delete.
+
+        Returns:
+            Raw GraphQL mutation response payload.
         """
         try:
             client = require_user_mutation(ctx, "delete user")

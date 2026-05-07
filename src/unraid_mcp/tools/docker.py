@@ -18,7 +18,14 @@ def register_docker_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(tags={"docker"})
     async def unraid_list_containers(ctx: Context) -> list[DockerContainer]:
-        """List all Docker containers with status, image, ports, and network mode."""
+        """List all Docker containers with status, image, ports, and network mode.
+
+        Args:
+            ctx: FastMCP request context.
+
+        Returns:
+            List of ``DockerContainer`` models, one per container known to Docker.
+        """
         try:
             client = require_client(ctx)
             return await client.list_containers()
@@ -30,7 +37,11 @@ def register_docker_tools(mcp: FastMCP) -> None:
         """Get detailed info for a specific Docker container by ID or name.
 
         Args:
+            ctx: FastMCP request context.
             container_id: Container ID or name (matched against the ``names`` array).
+
+        Returns:
+            ``DockerContainer`` model for the matching container.
         """
         try:
             client = require_client(ctx)
@@ -48,7 +59,14 @@ def register_docker_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(tags={"docker"})
     async def unraid_list_docker_networks(ctx: Context) -> list[DockerNetwork]:
-        """List Docker networks (id, name, driver, scope)."""
+        """List Docker networks (id, name, driver, scope).
+
+        Args:
+            ctx: FastMCP request context.
+
+        Returns:
+            List of ``DockerNetwork`` models, one per Docker network.
+        """
         try:
             client = require_client(ctx)
             return await client.list_docker_networks()
@@ -62,7 +80,11 @@ def register_docker_tools(mcp: FastMCP) -> None:
         """Start a Docker container by ID.
 
         Args:
+            ctx: FastMCP request context.
             container_id: Container ID.
+
+        Returns:
+            Raw GraphQL mutation response payload.
         """
         try:
             client = require_readwrite(ctx, "start container")
@@ -75,7 +97,11 @@ def register_docker_tools(mcp: FastMCP) -> None:
         """Stop a Docker container by ID.
 
         Args:
+            ctx: FastMCP request context.
             container_id: Container ID.
+
+        Returns:
+            Raw GraphQL mutation response payload.
         """
         try:
             client = require_readwrite(ctx, "stop container")
@@ -88,7 +114,11 @@ def register_docker_tools(mcp: FastMCP) -> None:
         """Restart a Docker container by ID.
 
         Args:
+            ctx: FastMCP request context.
             container_id: Container ID.
+
+        Returns:
+            Raw GraphQL mutation response payload.
         """
         try:
             client = require_readwrite(ctx, "restart container")
@@ -101,7 +131,11 @@ def register_docker_tools(mcp: FastMCP) -> None:
         """Pause a running Docker container.
 
         Args:
+            ctx: FastMCP request context.
             container_id: Container ID.
+
+        Returns:
+            Raw GraphQL mutation response payload.
         """
         try:
             client = require_readwrite(ctx, "pause container")
@@ -114,7 +148,11 @@ def register_docker_tools(mcp: FastMCP) -> None:
         """Unpause a paused Docker container.
 
         Args:
+            ctx: FastMCP request context.
             container_id: Container ID.
+
+        Returns:
+            Raw GraphQL mutation response payload.
         """
         try:
             client = require_readwrite(ctx, "unpause container")
