@@ -130,8 +130,8 @@ def create_server(config: UnraidConfig | None = None) -> FastMCP:
 
     register_all_tools(server)
 
-    # Apply mode gating — hide write tools in readonly mode
-    if not config.is_readwrite:
+    # Apply mode gating — hide write tools when the env-flag write-gate is off.
+    if not config.enable_write_tools:
         server.disable(tags={"write"})
         logger.info("Read-only mode: write tools disabled")
     else:
