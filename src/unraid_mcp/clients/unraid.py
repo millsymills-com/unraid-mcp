@@ -106,7 +106,7 @@ query Shares {
 
 QUERY_USERS = """
 query Users {
-    users { id name description roles password }
+    users { id name description roles }
 }
 """
 

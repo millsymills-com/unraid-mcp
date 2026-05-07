@@ -10,6 +10,7 @@ import respx
 
 from unraid_mcp.clients.unraid import UnraidClient
 from unraid_mcp.errors import UnraidConnectionError
+from unraid_mcp.models.users import User
 
 GRAPHQL_URL = "https://tower.local:443/graphql"
 
@@ -127,6 +128,33 @@ class TestStartParityCheck:
         await client.start_parity_check()
         sent = json.loads(route.calls[0].request.content)
         assert sent["variables"] == {"correct": False}
+
+
+class TestListUsers:
+    @respx.mock
+    async def test_list_users_returns_user_models(self, client):
+        users = [
+            {"id": "u1", "name": "root", "description": "admin", "roles": "admin"},
+            {"id": "u2", "name": "alice", "description": None, "roles": "user"},
+        ]
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"users": users}}))
+        result = await client.list_users()
+        assert [u.name for u in result] == ["root", "alice"]
+
+    @respx.mock
+    async def test_list_users_query_does_not_request_password(self, client):
+        # Regression for #107: never select User.password — it returns the
+        # /etc/shadow hash and would land in MCP transcripts and logs.
+        route = respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"users": []}}))
+        await client.list_users()
+        sent = json.loads(route.calls[0].request.content)
+        assert "password" not in sent["query"]
+
+    def test_user_model_has_no_password_field(self):
+        # Regression for #107: even if the upstream schema starts pushing
+        # `password` unsolicited, the declared model must not name it as a
+        # field — this prevents accidental .password access in tools.
+        assert "password" not in User.model_fields
 
 
 class TestCreateUser:
