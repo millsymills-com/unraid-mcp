@@ -54,6 +54,6 @@ def configure_logging(*, level: str | None = None, plain: bool | None = None) ->
     for existing in list(root.handlers):
         if getattr(existing, "_unraid_mcp_handler", False):
             root.removeHandler(existing)
-    handler._unraid_mcp_handler = True  # type: ignore[attr-defined]
+    handler._unraid_mcp_handler = True  # ty: ignore[unresolved-attribute]
     root.addHandler(handler)
     root.setLevel(resolved_level)

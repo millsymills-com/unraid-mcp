@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 def get_ctx(ctx: Context) -> ServerContext:
     """Extract the typed lifespan context from a FastMCP ``Context``."""
-    return ctx.lifespan_context  # type: ignore[return-value]
+    return ctx.lifespan_context  # ty: ignore[invalid-return-type]
 
 
 def require_client(ctx: Context) -> UnraidClient:
@@ -24,7 +24,7 @@ def require_client(ctx: Context) -> UnraidClient:
     client = context.client
     if client is None:
         raise UnraidNotConfiguredError("UNRAID_API_KEY is not set or initial connection failed")
-    return client  # type: ignore[return-value]
+    return client  # ty: ignore[invalid-return-type]
 
 
 def require_readwrite(ctx: Context, action: str) -> UnraidClient:

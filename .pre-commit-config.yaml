@@ -30,9 +30,9 @@ repos:
         language: system
         types_or: [python, pyi]
         require_serial: true
-      - id: mypy
-        name: mypy (uv)
-        entry: uv run mypy src/unraid_mcp/
+      - id: ty
+        name: ty (uv)
+        entry: uv run ty check src/unraid_mcp/
         language: system
         types: [python]
         pass_filenames: false
