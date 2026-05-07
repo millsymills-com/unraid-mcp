@@ -27,7 +27,7 @@ All checks must pass locally before you push:
 ```bash
 uv run ruff check src/ tests/
 uv run ruff format --check src/ tests/
-uv run mypy src/unraid_mcp/
+uv run ty check src/unraid_mcp/
 uv run pytest tests/unit/ -v
 ```
 
@@ -39,7 +39,7 @@ uv run bandit -r src/unraid_mcp/ -c pyproject.toml
 
 ## Coding Standards
 
-- **Python >=3.11**, strict `mypy`, `ruff` for lint and format.
+- **Python >=3.13**, strict `ty`, `ruff` for lint and format.
 - **Line length**: 120 characters.
 - **No print statements** — use the `logging` module (enforced by ruff T20).
 - **Models** use `extra="allow"` to tolerate unknown fields from the Unraid API.

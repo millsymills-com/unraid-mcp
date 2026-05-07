@@ -15,7 +15,7 @@ Production-grade Python MCP server for the Unraid GraphQL API.
 - **MCP tools** covering Unraid system info, array, disks, Docker, VMs, shares, users, notifications, and parity checks
 - **Read/write mode separation** — write tools invisible in readonly mode (`mcp.disable(tags={"write"})`) with runtime defense-in-depth
 - **Single-endpoint GraphQL client** — `httpx` async client over the Unraid `/graphql` endpoint with `tenacity` retry and typed error mapping
-- **Typed, linted, tested** — strict mypy, ruff, pytest with CI across Python 3.11–3.13
+- **Typed, linted, tested** — strict ty, ruff, pytest with CI on Python 3.13
 
 ## Quick Start
 
@@ -196,7 +196,7 @@ uv run ruff check src/ tests/
 uv run ruff format --check src/ tests/
 
 # Type check
-uv run mypy src/unraid_mcp/
+uv run ty check src/unraid_mcp/
 
 # Test
 uv run pytest tests/unit/ -v

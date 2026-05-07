@@ -36,7 +36,7 @@ async def _check_schema() -> int:
 
     client = UnraidClient(
         graphql_url=config.graphql_url,
-        api_key=config.unraid_api_key,  # type: ignore[arg-type]
+        api_key=config.unraid_api_key,  # ty: ignore[invalid-argument-type]
         verify_ssl=config.unraid_verify_ssl,
         timeout=config.unraid_request_timeout,
         max_retries=config.unraid_max_retries,
@@ -79,7 +79,7 @@ async def _check_config() -> int:
     print("\nValidating connection…")
     client = UnraidClient(
         graphql_url=config.graphql_url,
-        api_key=config.unraid_api_key,  # type: ignore[arg-type]
+        api_key=config.unraid_api_key,  # ty: ignore[invalid-argument-type]
         verify_ssl=config.unraid_verify_ssl,
         timeout=config.unraid_request_timeout,
         max_retries=config.unraid_max_retries,

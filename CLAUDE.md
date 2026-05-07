@@ -15,7 +15,7 @@ uv run ruff check src/ tests/
 uv run ruff format --check src/ tests/
 
 # Type check
-uv run mypy src/unraid_mcp/
+uv run ty check src/unraid_mcp/
 
 # Test (unit only, excludes integration)
 uv run pytest tests/unit/ -v
@@ -73,7 +73,7 @@ src/unraid_mcp/
 
 ## Conventions
 
-- **Python >=3.11**, strict mypy, ruff for lint+format
+- **Python >=3.13**, strict ty, ruff for lint+format
 - **Line length**: 120 characters
 - **Tool naming**: `unraid_{verb}_{entity}` (e.g., `unraid_list_containers`, `unraid_start_array`)
 - **Write tools**: Tagged with `{"write"}`, annotated with `readOnlyHint=False`. Disabled in readonly mode via `mcp.disable(tags={"write"})`
@@ -114,6 +114,6 @@ result = await client.mutate(MUTATION_START_CONTAINER, variables={"id": containe
 
 ## CI/CD
 
-- **CI**: Runs on push to main and PRs. Lint (ruff) + typecheck (mypy) on Python 3.13; test (pytest) across Python 3.11-3.13
+- **CI**: Runs on push to main and PRs. Lint (ruff) + typecheck (ty) + test (pytest) on Python 3.13.
 - **Security**: Weekly Bandit scans + dependency review on PRs
 - **Dependabot**: Weekly updates for Python deps (uv ecosystem), GitHub Actions, and Docker base images

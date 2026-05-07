@@ -35,7 +35,7 @@ def make_server_lifespan(config: UnraidConfig) -> Lifespan:
     config.
     """
 
-    @lifespan  # type: ignore[arg-type]
+    @lifespan  # ty: ignore[invalid-argument-type]
     async def _server_lifespan(_server: FastMCP) -> AsyncIterator[ServerContext]:  # noqa: PLR0912 — startup flow
         context = ServerContext(config=config)
 
@@ -52,7 +52,7 @@ def make_server_lifespan(config: UnraidConfig) -> Lifespan:
         if config.api_enabled:
             client = UnraidClient(
                 graphql_url=config.graphql_url,
-                api_key=config.unraid_api_key,  # type: ignore[arg-type]
+                api_key=config.unraid_api_key,  # ty: ignore[invalid-argument-type]
                 verify_ssl=config.unraid_verify_ssl,
                 timeout=config.unraid_request_timeout,
                 max_retries=config.unraid_max_retries,
@@ -98,7 +98,7 @@ def make_server_lifespan(config: UnraidConfig) -> Lifespan:
         finally:
             if context.client is not None:
                 try:
-                    await context.client.close()  # type: ignore[attr-defined]
+                    await context.client.close()  # ty: ignore[unresolved-attribute]
                     logger.info("Closed Unraid client")
                 except Exception:
                     logger.exception("Error closing Unraid client")
