@@ -10,6 +10,7 @@ from unraid_mcp import __version__
 from unraid_mcp.clients.unraid import UnraidClient
 from unraid_mcp.config import UnraidConfig
 from unraid_mcp.errors import UnraidError
+from unraid_mcp.logging_config import configure_logging
 from unraid_mcp.server import create_server
 
 
@@ -130,6 +131,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     """Start the Unraid MCP server (or run a preflight check)."""
+    configure_logging()
     args = _build_parser().parse_args()
     if args.check_config:
         sys.exit(asyncio.run(_check_config()))
