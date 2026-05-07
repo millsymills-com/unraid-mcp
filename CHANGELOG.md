@@ -74,6 +74,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `client.close()`.
 
 ### Changed
+- **Breaking:** `UNRAID_VERIFY_SSL` now defaults to `true`. Operators using
+  self-signed LAN certs must set `UNRAID_VERIFY_SSL=false` in `.env` after
+  upgrade or connections will fail TLS verification (#108).
 - `validate_connection()` now propagates typed `UnraidError` subclasses
   instead of returning a bool. The lifespan catches the exception, logs
   the real cause, closes the httpx client, and leaves `context.client =

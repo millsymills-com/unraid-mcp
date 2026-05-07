@@ -76,7 +76,7 @@ class BaseGraphQLClient:
         graphql_url: str,
         api_key: str,
         *,
-        verify_ssl: bool = False,
+        verify_ssl: bool = True,
         timeout: int = 30,
         max_retries: int = 3,
     ) -> None:
