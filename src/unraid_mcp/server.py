@@ -91,7 +91,10 @@ def make_server_lifespan(config: UnraidConfig) -> Lifespan:
                     else:
                         logger.info("Schema compatibility check passed")
         else:
-            logger.warning("UNRAID_API_KEY not set — tools will return 'not configured' errors")
+            logger.warning(
+                "Unraid API credentials not configured — tools will return "
+                "'not configured' errors. See README for required environment variables.",
+            )
 
         try:
             yield context
