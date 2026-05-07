@@ -46,32 +46,50 @@ class UnraidNotConfiguredError(UnraidError):
     """API key was not configured but a tool was called."""
 
 
+_ERROR_TEMPLATES: tuple[tuple[type[UnraidError], str], ...] = (
+    (UnraidAuthError, "Authentication failed: {error}. Check your API key."),
+    (UnraidNotFoundError, "Resource not found: {error}"),
+    (UnraidRateLimitError, "Rate limit exceeded: {error}. Try again later."),
+    (UnraidConnectionError, "Connection failed: {error}. Check host and network."),
+    (UnraidReadOnlyError, "Write operation blocked: {error}. Server is in read-only mode."),
+    (UnraidNotConfiguredError, "Unraid API not configured: {error}. Set UNRAID_API_KEY."),
+    (UnraidGraphQLError, "GraphQL error: {error}"),
+    (UnraidError, "Unraid API error: {error}"),
+)
+
+
+def _classify_error(error: Exception) -> ToolError:
+    """Map any exception raised by the Unraid client to a typed :class:`ToolError`.
+
+    Centralised so every tool surfaces the same agent-readable wording for a
+    given failure mode and so the error-code mapping lives in one place.
+
+    Args:
+        error: The exception raised inside the tool body.
+
+    Returns:
+        A ``ToolError`` chained to ``error`` via ``__cause__`` at the call
+        site. ``ToolError`` instances are returned unchanged.
+    """
+    if isinstance(error, ToolError):
+        return error
+    for exc_type, template in _ERROR_TEMPLATES:
+        if isinstance(error, exc_type):
+            return ToolError(template.format(error=error))
+    logger.exception("Unexpected error in tool execution")
+    return ToolError(f"Unexpected error: {error}")
+
+
 def handle_client_error(error: Exception) -> NoReturn:
-    """Map Unraid exceptions to FastMCP ToolError with agent-readable messages.
+    """Raise the classified :class:`ToolError` for ``error``.
+
+    Wraps :func:`_classify_error` so call sites can ``except Exception as e:``
+    then ``handle_client_error(e)`` without an extra ``raise from`` line.
 
     Raises:
-        ToolError: Always raised with a descriptive message.
+        ToolError: Always raised, chained to ``error``.
     """
-    # If a ToolError was raised upstream, preserve it — don't re-wrap under
-    # the "Unexpected error" fallback which would lose the original message.
-    if isinstance(error, ToolError):
-        raise error
-    if isinstance(error, UnraidAuthError):
-        raise ToolError(f"Authentication failed: {error}. Check your API key.") from error
-    if isinstance(error, UnraidNotFoundError):
-        raise ToolError(f"Resource not found: {error}") from error
-    if isinstance(error, UnraidRateLimitError):
-        raise ToolError(f"Rate limit exceeded: {error}. Try again later.") from error
-    if isinstance(error, UnraidConnectionError):
-        raise ToolError(f"Connection failed: {error}. Check host and network.") from error
-    if isinstance(error, UnraidReadOnlyError):
-        raise ToolError(f"Write operation blocked: {error}. Server is in read-only mode.") from error
-    if isinstance(error, UnraidNotConfiguredError):
-        raise ToolError(f"Unraid API not configured: {error}. Set UNRAID_API_KEY.") from error
-    if isinstance(error, UnraidGraphQLError):
-        raise ToolError(f"GraphQL error: {error}") from error
-    if isinstance(error, UnraidError):
-        raise ToolError(f"Unraid API error: {error}") from error
-    # Unexpected errors
-    logger.exception("Unexpected error in tool execution")
-    raise ToolError(f"Unexpected error: {error}") from error
+    tool_error = _classify_error(error)
+    if tool_error is error:
+        raise tool_error
+    raise tool_error from error
