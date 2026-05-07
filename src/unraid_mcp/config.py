@@ -36,7 +36,7 @@ class UnraidConfig(BaseSettings):
     unraid_port: int = Field(default=443, ge=1, le=65535)
     unraid_use_https: bool = True
     unraid_api_key: str | None = None
-    unraid_verify_ssl: bool = False
+    unraid_verify_ssl: bool = True
 
     # General
     unraid_request_timeout: int = Field(default=30, gt=0)

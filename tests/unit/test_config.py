@@ -74,9 +74,9 @@ class TestDefaults:
         config = UnraidConfig(_env_file=None)
         assert config.unraid_use_https is True
 
-    def test_default_verify_ssl_false(self):
+    def test_default_verify_ssl_true(self):
         config = UnraidConfig(_env_file=None)
-        assert config.unraid_verify_ssl is False
+        assert config.unraid_verify_ssl is True
 
     def test_default_timeout(self):
         config = UnraidConfig(_env_file=None)

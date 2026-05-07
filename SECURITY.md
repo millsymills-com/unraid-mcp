@@ -37,6 +37,8 @@ array, and create users. To minimise blast radius:
   and rotate it via the Unraid WebGUI if it was ever exposed.
 - Prefer `password_env_var` over the inline `password` argument when
   calling `unraid_create_user` so secrets stay out of MCP transcripts.
-- Set `UNRAID_VERIFY_SSL=true` whenever your Unraid server has a valid
-  TLS cert. The default is `false` only because LAN appliances commonly
-  ship with self-signed certs.
+- Leave `UNRAID_VERIFY_SSL` at its default of `true`. Override to `false`
+  only when your Unraid server uses a self-signed cert AND you accept the
+  MITM risk on that network segment — disabling verification lets any
+  attacker on the network path capture the `x-api-key` header and any
+  in-flight credentials.
