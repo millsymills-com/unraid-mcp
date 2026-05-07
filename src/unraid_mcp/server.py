@@ -44,8 +44,9 @@ def make_server_lifespan(config: UnraidConfig) -> Lifespan:
 
         if config.unraid_use_https and not config.unraid_verify_ssl:
             logger.warning(
-                "TLS verification is DISABLED for %s — acceptable for self-signed LAN certs, "
-                "but unsafe on untrusted networks. Set UNRAID_VERIFY_SSL=true when possible.",
+                "TLS verification is DISABLED for %s — UNRAID_VERIFY_SSL=false overrides the "
+                "secure default. Acceptable only for self-signed LAN certs on a trusted segment; "
+                "an attacker on the network path can capture the API key.",
                 config.base_url,
             )
 

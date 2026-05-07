@@ -181,7 +181,7 @@ See [.env.example](.env.example) for all configuration options.
 | `UNRAID_PORT` | `443` | HTTPS port for the API |
 | `UNRAID_USE_HTTPS` | `true` | Use HTTPS (set false for plain HTTP) |
 | `UNRAID_API_KEY` | — | API key from Unraid WebGUI |
-| `UNRAID_VERIFY_SSL` | `false` | Verify TLS cert (false for self-signed) |
+| `UNRAID_VERIFY_SSL` | `true` | Verify TLS cert. Set `false` only for self-signed LAN certs (accepts MITM risk). |
 | `UNRAID_ALLOW_USER_MUTATIONS` | `false` | Secondary switch for `unraid_create_user` / `unraid_delete_user`; even in `readwrite` mode these stay hidden unless this is `true` |
 | `UNRAID_NEW_USER_*` | — | When set, can be referenced via `password_env_var` on `unraid_create_user` so the password stays out of MCP transcripts. Name must start with `UNRAID_NEW_USER_`. |
 

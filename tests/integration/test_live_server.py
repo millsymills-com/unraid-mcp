@@ -42,7 +42,7 @@ async def live_client():
     client = UnraidClient(
         graphql_url=f"{scheme}://{host}/graphql",
         api_key=api_key,
-        verify_ssl=os.environ.get("UNRAID_VERIFY_SSL", "false").lower() == "true",
+        verify_ssl=os.environ.get("UNRAID_VERIFY_SSL", "true").lower() != "false",
         timeout=15,
         max_retries=1,
     )
