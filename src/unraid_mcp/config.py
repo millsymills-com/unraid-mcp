@@ -10,6 +10,11 @@ from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
 
+# Env var that toggles the ENABLE_WRITE policy. Set to ``readwrite`` to
+# allow write-tool registration; any other value (or unset) keeps the
+# server in read-only mode.
+ENABLE_WRITE_TOOLS_ENV_VAR = "UNRAID_MODE"
+
 
 class UnraidMode(enum.StrEnum):
     """Server operation mode."""
@@ -45,9 +50,20 @@ class UnraidConfig(BaseSettings):
     unraid_allow_user_mutations: bool = False
 
     @property
-    def is_readwrite(self) -> bool:
-        """Whether server is in read-write mode."""
+    def enable_write_tools(self) -> bool:
+        """Whether write-tool registration is allowed (env-flag write-gate).
+
+        Sourced from ``UNRAID_MODE`` (``readwrite`` enables, ``readonly``
+        disables). The property name spells out the gate so the canonical
+        write-tool check in :mod:`unraid_mcp.server` reads as a single
+        boolean and so static auditors can pattern-match the policy.
+        """
         return self.unraid_mode == UnraidMode.READWRITE
+
+    @property
+    def is_readwrite(self) -> bool:
+        """Backwards-compatible alias for :attr:`enable_write_tools`."""
+        return self.enable_write_tools
 
     @property
     def api_enabled(self) -> bool:

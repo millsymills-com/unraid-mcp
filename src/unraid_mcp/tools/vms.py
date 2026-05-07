@@ -16,7 +16,14 @@ def register_vm_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(tags={"vms"})
     async def unraid_list_vms(ctx: Context) -> Vms:
-        """List all libvirt VMs (UUID, name, state)."""
+        """List all libvirt VMs (UUID, name, state).
+
+        Args:
+            ctx: FastMCP request context.
+
+        Returns:
+            ``Vms`` model wrapping the list of ``VmDomain`` entries.
+        """
         try:
             client = require_client(ctx)
             return await client.list_vms()
@@ -28,7 +35,11 @@ def register_vm_tools(mcp: FastMCP) -> None:
         """Start a VM by UUID.
 
         Args:
+            ctx: FastMCP request context.
             vm_id: VM UUID.
+
+        Returns:
+            Raw GraphQL mutation response payload.
         """
         try:
             client = require_readwrite(ctx, "start VM")
@@ -41,7 +52,11 @@ def register_vm_tools(mcp: FastMCP) -> None:
         """Gracefully stop a VM by UUID (sends ACPI shutdown).
 
         Args:
+            ctx: FastMCP request context.
             vm_id: VM UUID.
+
+        Returns:
+            Raw GraphQL mutation response payload.
         """
         try:
             client = require_readwrite(ctx, "stop VM")
@@ -54,7 +69,11 @@ def register_vm_tools(mcp: FastMCP) -> None:
         """Force-stop a VM by UUID (equivalent to pulling the plug).
 
         Args:
+            ctx: FastMCP request context.
             vm_id: VM UUID.
+
+        Returns:
+            Raw GraphQL mutation response payload.
         """
         try:
             client = require_readwrite(ctx, "force-stop VM")
@@ -67,7 +86,11 @@ def register_vm_tools(mcp: FastMCP) -> None:
         """Pause a running VM by UUID.
 
         Args:
+            ctx: FastMCP request context.
             vm_id: VM UUID.
+
+        Returns:
+            Raw GraphQL mutation response payload.
         """
         try:
             client = require_readwrite(ctx, "pause VM")
@@ -80,7 +103,11 @@ def register_vm_tools(mcp: FastMCP) -> None:
         """Resume a paused VM by UUID.
 
         Args:
+            ctx: FastMCP request context.
             vm_id: VM UUID.
+
+        Returns:
+            Raw GraphQL mutation response payload.
         """
         try:
             client = require_readwrite(ctx, "resume VM")
@@ -93,7 +120,11 @@ def register_vm_tools(mcp: FastMCP) -> None:
         """Reboot a VM by UUID.
 
         Args:
+            ctx: FastMCP request context.
             vm_id: VM UUID.
+
+        Returns:
+            Raw GraphQL mutation response payload.
         """
         try:
             client = require_readwrite(ctx, "reboot VM")

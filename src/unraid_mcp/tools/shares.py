@@ -14,7 +14,14 @@ def register_share_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(tags={"shares"})
     async def unraid_list_shares(ctx: Context) -> list[Share]:
-        """List user shares with capacity, allocator, cache settings, and disk inclusion lists."""
+        """List user shares with capacity, allocator, cache settings, and disk inclusion lists.
+
+        Args:
+            ctx: FastMCP request context.
+
+        Returns:
+            List of ``Share`` models, one per user share.
+        """
         try:
             client = require_client(ctx)
             return await client.list_shares()
@@ -26,7 +33,11 @@ def register_share_tools(mcp: FastMCP) -> None:
         """Get a specific user share by name.
 
         Args:
+            ctx: FastMCP request context.
             name: Share name.
+
+        Returns:
+            ``Share`` model for the matching share.
         """
         try:
             client = require_client(ctx)

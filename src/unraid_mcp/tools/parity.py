@@ -16,7 +16,14 @@ def register_parity_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(tags={"array", "parity"})
     async def unraid_get_parity_history(ctx: Context) -> list[ParityHistoryEntry]:
-        """List historical parity check runs (date, duration, speed, errors)."""
+        """List historical parity check runs (date, duration, speed, errors).
+
+        Args:
+            ctx: FastMCP request context.
+
+        Returns:
+            List of ``ParityHistoryEntry`` models in chronological order.
+        """
         try:
             client = require_client(ctx)
             return await client.get_parity_history()
@@ -28,7 +35,11 @@ def register_parity_tools(mcp: FastMCP) -> None:
         """Start a parity check.
 
         Args:
+            ctx: FastMCP request context.
             correct: If True, write corrections to parity. If False (default), report errors only.
+
+        Returns:
+            Raw GraphQL mutation response payload.
         """
         try:
             client = require_readwrite(ctx, "start parity check")
@@ -38,7 +49,14 @@ def register_parity_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(tags={"write", "array", "parity"}, annotations={"readOnlyHint": False, "destructiveHint": False})
     async def unraid_pause_parity_check(ctx: Context) -> dict[str, Any]:
-        """Pause an in-progress parity check."""
+        """Pause an in-progress parity check.
+
+        Args:
+            ctx: FastMCP request context.
+
+        Returns:
+            Raw GraphQL mutation response payload.
+        """
         try:
             client = require_readwrite(ctx, "pause parity check")
             return await client.pause_parity_check()
@@ -47,7 +65,14 @@ def register_parity_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(tags={"write", "array", "parity"}, annotations={"readOnlyHint": False, "destructiveHint": False})
     async def unraid_resume_parity_check(ctx: Context) -> dict[str, Any]:
-        """Resume a paused parity check."""
+        """Resume a paused parity check.
+
+        Args:
+            ctx: FastMCP request context.
+
+        Returns:
+            Raw GraphQL mutation response payload.
+        """
         try:
             client = require_readwrite(ctx, "resume parity check")
             return await client.resume_parity_check()
@@ -56,7 +81,14 @@ def register_parity_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(tags={"write", "array", "parity"}, annotations={"readOnlyHint": False, "destructiveHint": True})
     async def unraid_cancel_parity_check(ctx: Context) -> dict[str, Any]:
-        """Cancel an in-progress parity check."""
+        """Cancel an in-progress parity check.
+
+        Args:
+            ctx: FastMCP request context.
+
+        Returns:
+            Raw GraphQL mutation response payload.
+        """
         try:
             client = require_readwrite(ctx, "cancel parity check")
             return await client.cancel_parity_check()
