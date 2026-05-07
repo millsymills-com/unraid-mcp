@@ -12,4 +12,3 @@ class User(UnraidBaseModel):
     name: str | None = None
     description: str | None = None
     roles: str | None = None
-    password: str | None = None
