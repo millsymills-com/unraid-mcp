@@ -6,6 +6,8 @@ import argparse
 import asyncio
 import sys
 
+from pydantic import SecretStr
+
 from unraid_mcp import __version__
 from unraid_mcp.clients.unraid import UnraidClient
 from unraid_mcp.config import UnraidConfig
@@ -14,12 +16,15 @@ from unraid_mcp.logging_config import configure_logging
 from unraid_mcp.server import create_server
 
 
-def _redact_api_key(key: str | None) -> str:
-    if not key:
+def _redact_api_key(key: SecretStr | str | None) -> str:
+    if key is None:
         return "<not set>"
-    if len(key) <= 8:
+    raw = key.get_secret_value() if isinstance(key, SecretStr) else key
+    if not raw:
+        return "<not set>"
+    if len(raw) <= 8:
         return "***"
-    return f"{key[:4]}…{key[-2:]}"
+    return f"{raw[:4]}…{raw[-2:]}"
 
 
 async def _check_schema() -> int:
@@ -35,9 +40,12 @@ async def _check_schema() -> int:
         print("No API key configured — set UNRAID_API_KEY to run the schema check.")
         return 1
 
+    api_key = config.unraid_api_key
+    if api_key is None:  # api_enabled gated this above, kept for type-narrowing
+        return 1
     client = UnraidClient(
         graphql_url=config.graphql_url,
-        api_key=config.unraid_api_key,  # ty: ignore[invalid-argument-type]
+        api_key=api_key,
         verify_ssl=config.unraid_verify_ssl,
         timeout=config.unraid_request_timeout,
         max_retries=config.unraid_max_retries,
@@ -78,9 +86,12 @@ async def _check_config() -> int:
         return 1
 
     print("\nValidating connection…")
+    api_key = config.unraid_api_key
+    if api_key is None:  # api_enabled gated this above, kept for type-narrowing
+        return 1
     client = UnraidClient(
         graphql_url=config.graphql_url,
-        api_key=config.unraid_api_key,  # ty: ignore[invalid-argument-type]
+        api_key=api_key,
         verify_ssl=config.unraid_verify_ssl,
         timeout=config.unraid_request_timeout,
         max_retries=config.unraid_max_retries,

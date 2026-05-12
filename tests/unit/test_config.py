@@ -51,6 +51,33 @@ class TestApiEnabled:
         assert config.api_enabled is False
 
 
+class TestApiKeySecret:
+    """`unraid_api_key` must be a SecretStr — the value must never leak via repr or model_dump."""
+
+    SECRET = "SUPER-SECRET-API-KEY-abc123xyz456"
+
+    def test_get_secret_value_returns_raw_string(self):
+        config = UnraidConfig(_env_file=None, unraid_api_key=self.SECRET)
+        assert config.unraid_api_key is not None
+        assert config.unraid_api_key.get_secret_value() == self.SECRET
+
+    def test_repr_does_not_contain_secret(self):
+        config = UnraidConfig(_env_file=None, unraid_api_key=self.SECRET)
+        assert self.SECRET not in repr(config)
+
+    def test_model_dump_does_not_contain_secret(self):
+        config = UnraidConfig(_env_file=None, unraid_api_key=self.SECRET)
+        dumped = str(config.model_dump())
+        assert self.SECRET not in dumped
+
+    def test_env_loaded_key_is_redacted_in_repr(self, monkeypatch):
+        monkeypatch.setenv("UNRAID_API_KEY", self.SECRET)
+        config = UnraidConfig()
+        assert self.SECRET not in repr(config)
+        assert config.unraid_api_key is not None
+        assert config.unraid_api_key.get_secret_value() == self.SECRET
+
+
 class TestUserMutationsFlag:
     def test_default_is_false(self):
         config = UnraidConfig(_env_file=None)

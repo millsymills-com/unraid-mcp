@@ -50,10 +50,10 @@ def make_server_lifespan(config: UnraidConfig) -> Lifespan:
                 config.base_url,
             )
 
-        if config.api_enabled:
+        if config.api_enabled and config.unraid_api_key is not None:
             client = UnraidClient(
                 graphql_url=config.graphql_url,
-                api_key=config.unraid_api_key,  # ty: ignore[invalid-argument-type]
+                api_key=config.unraid_api_key,
                 verify_ssl=config.unraid_verify_ssl,
                 timeout=config.unraid_request_timeout,
                 max_retries=config.unraid_max_retries,
