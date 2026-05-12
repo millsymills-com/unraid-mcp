@@ -55,7 +55,7 @@ src/unraid_mcp/
 │   ├── common.py        # Shared types
 │   ├── system.py        # System / OS / CPU / memory
 │   ├── array.py         # Array + parity
-│   ├── disks.py         # Disk and SMART
+│   ├── disks.py         # Disk
 │   ├── docker.py        # Containers + networks
 │   ├── vms.py           # Virtual machines
 │   ├── shares.py        # User and disk shares
@@ -67,7 +67,7 @@ src/unraid_mcp/
     ├── array.py         # get_array, start/stop array
     ├── parity.py        # parity history + start/pause/resume/cancel
     ├── disks.py         # list / get disk
-    ├── docker.py        # containers + networks, start/stop/restart/pause/unpause
+    ├── docker.py        # list / get container, list networks, start/stop/restart/pause/unpause
     ├── vms.py           # list / start / stop / force_stop / pause / resume / reboot
     ├── shares.py        # list / get share
     ├── users.py         # list / create / delete
