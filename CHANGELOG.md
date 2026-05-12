@@ -20,6 +20,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `gh issue list` defaults to `sort:created-desc`, so the previous
   query returned the newest issue, contradicting the documented intent
   of reusing the issue with accumulated history (#159).
+- Reverted `Disk.size` from `int | None` back to `str | None` to match
+  `ArrayDisk.size` and `Share.size`. Unraid byte scalars serialize as
+  JSON strings and non-numeric values (`"4 TB"`, `"-"`) would have
+  failed validation under the `int` typing introduced in #154 (#158).
 - Aligned six read queries with the Unraid API 4.32+ schema, verified
   against a live Unraid 7.x / API 4.32 server. `SCHEMA_EXPECTATIONS` is
   updated in lockstep so `unraid-mcp --check-schema` and the boot-time
