@@ -14,6 +14,7 @@ from unraid_mcp.errors import (
     UnraidGraphQLError,
     UnraidNotFoundError,
     UnraidRateLimitError,
+    UnraidValidationError,
 )
 
 GRAPHQL_URL = "https://tower.local:443/graphql"
@@ -357,3 +358,93 @@ class TestSslVerificationWarning:
             client = BaseGraphQLClient(graphql_url=GRAPHQL_URL, api_key="k", verify_ssl=True)
             await client.close()
         assert not any("SSL verification disabled" in rec.message for rec in caplog.records)
+
+
+class TestGraphQLErrorStructure:
+    """`_check_graphql_errors` preserves structured GraphQL fields (#69)."""
+
+    @respx.mock
+    async def test_extensions_code_flows_through_on_graphql_error(self, client):
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "errors": [
+                        {
+                            "message": "Internal boom",
+                            "extensions": {"code": "INTERNAL_SERVER_ERROR"},
+                        }
+                    ],
+                    "data": None,
+                },
+            )
+        )
+        with pytest.raises(UnraidGraphQLError) as exc_info:
+            await client.query("query { x }")
+        assert exc_info.value.code == "INTERNAL_SERVER_ERROR"
+
+    @respx.mock
+    async def test_validation_failed_raises_validation_error(self, client):
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "errors": [
+                        {
+                            "message": "Cannot query field 'newField' on type 'Query'.",
+                            "extensions": {"code": "GRAPHQL_VALIDATION_FAILED"},
+                        }
+                    ],
+                    "data": None,
+                },
+            )
+        )
+        with pytest.raises(UnraidValidationError) as exc_info:
+            await client.query("query { newField }")
+        assert exc_info.value.code == "GRAPHQL_VALIDATION_FAILED"
+        # UnraidValidationError is also an UnraidGraphQLError
+        assert isinstance(exc_info.value, UnraidGraphQLError)
+
+    @respx.mock
+    async def test_path_and_locations_preserved_on_exception(self, client):
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "errors": [
+                        {
+                            "message": "Resolver exploded",
+                            "extensions": {"code": "INTERNAL_SERVER_ERROR"},
+                            "path": ["info", "os", "platform"],
+                            "locations": [{"line": 2, "column": 5}],
+                        }
+                    ],
+                    "data": None,
+                },
+            )
+        )
+        with pytest.raises(UnraidGraphQLError) as exc_info:
+            await client.query("query { info { os { platform } } }")
+        assert exc_info.value.path == ["info", "os", "platform"]
+        assert exc_info.value.locations == [{"line": 2, "column": 5}]
+        assert exc_info.value.errors
+        assert exc_info.value.errors[0]["message"] == "Resolver exploded"
+
+    @respx.mock
+    async def test_path_and_locations_default_to_none_when_absent(self, client):
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "errors": [{"message": "no extras here"}],
+                    "data": None,
+                },
+            )
+        )
+        with pytest.raises(UnraidGraphQLError) as exc_info:
+            await client.query("query { x }")
+        assert exc_info.value.code is None
+        assert exc_info.value.path is None
+        assert exc_info.value.locations is None
+        # Raw errors list is still preserved for callers that want it.
+        assert exc_info.value.errors == [{"message": "no extras here"}]

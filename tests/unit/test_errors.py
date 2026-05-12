@@ -22,6 +22,7 @@ from unraid_mcp.errors import (
     UnraidNotFoundError,
     UnraidRateLimitError,
     UnraidReadOnlyError,
+    UnraidValidationError,
     handle_client_error,
 )
 
@@ -100,3 +101,36 @@ class TestHandleClientErrorLogging:
         record = next(r for r in caplog.records if r.name == _LOGGER_NAME)
         assert record.levelno == logging.ERROR
         assert record.exc_info is not None
+
+
+class TestHandleClientErrorValidationMapping:
+    """`handle_client_error` produces an actionable upgrade message for
+    GraphQL validation failures instead of dumping the raw stack trace (#69).
+    """
+
+    def test_validation_error_message_says_upgrade(self) -> None:
+        with pytest.raises(Exception, match="upgrade unraid-mcp"):
+            handle_client_error(
+                UnraidValidationError(
+                    "Cannot query field 'newField' on type 'Query'.",
+                    code="GRAPHQL_VALIDATION_FAILED",
+                )
+            )
+
+    def test_validation_error_logs_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.WARNING, logger=_LOGGER_NAME)
+        with pytest.raises(Exception, match="upgrade unraid-mcp"):
+            handle_client_error(
+                UnraidValidationError(
+                    "Cannot query field 'newField' on type 'Query'.",
+                    code="GRAPHQL_VALIDATION_FAILED",
+                )
+            )
+        record = next(r for r in caplog.records if r.name == _LOGGER_NAME)
+        assert record.levelno == logging.WARNING
+        assert "UnraidValidationError" in record.getMessage()
+
+    def test_plain_graphql_error_still_uses_generic_wording(self) -> None:
+        # Subclass routing must not steal the generic UnraidGraphQLError branch.
+        with pytest.raises(Exception, match="GraphQL error"):
+            handle_client_error(UnraidGraphQLError("Resolver exploded", code="INTERNAL_SERVER_ERROR"))
