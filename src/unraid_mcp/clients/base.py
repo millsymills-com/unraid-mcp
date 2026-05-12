@@ -10,6 +10,7 @@ from typing import Any
 import httpx
 from pydantic import SecretStr
 from tenacity import (
+    before_sleep_log,
     retry,
     retry_if_exception_type,
     stop_after_attempt,
@@ -195,6 +196,7 @@ class BaseGraphQLClient:
             wait=wait_exponential(multiplier=1, min=1, max=10),
             retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException)),
             reraise=True,
+            before_sleep=before_sleep_log(logger, logging.WARNING),
         )
         async def _do() -> httpx.Response:
             return await self._client.post(self._graphql_url, json=payload)

@@ -211,6 +211,19 @@ class TestRetry:
             await client.query("query { x }")
         assert route.call_count == 1
 
+    @respx.mock
+    async def test_retry_emits_warning_log(self, client, caplog):
+        route = respx.post(GRAPHQL_URL)
+        route.side_effect = [
+            httpx.ConnectError("Connection refused"),
+            httpx.Response(200, json={"data": {"ok": True}}),
+        ]
+        with caplog.at_level("WARNING", logger="unraid_mcp.clients.base"):
+            await client.query("query { ok }")
+        retry_lines = [r for r in caplog.records if r.levelname == "WARNING" and "Retrying" in r.message]
+        assert retry_lines, f"expected a tenacity 'Retrying' WARNING line, got: {[r.message for r in caplog.records]}"
+        assert "ConnectError" in retry_lines[0].message
+
 
 class TestClose:
     async def test_close_calls_aclose(self, client):
