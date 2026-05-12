@@ -24,6 +24,7 @@ from unraid_mcp.errors import (
     UnraidGraphQLError,
     UnraidNotFoundError,
     UnraidRateLimitError,
+    UnraidValidationError,
 )
 
 logger = logging.getLogger(__name__)
@@ -113,12 +114,26 @@ class BaseGraphQLClient:
 
     # ── HTTP / GraphQL helpers ──────────────────────────────────────────
 
+    # Truncate raw HTTP error bodies in exception messages so a multi-KB
+    # validation error doesn't dominate logs while still leaving room for
+    # GraphQL error payloads (which routinely exceed the previous 200-byte
+    # cap, hiding the failing field name in the truncated tail).
+    _ERROR_BODY_LIMIT = 2000
+
+    def _truncate_body(self, body: str) -> str:
+        if len(body) <= self._ERROR_BODY_LIMIT:
+            return body
+        return f"{body[: self._ERROR_BODY_LIMIT]}… [truncated, {len(body)} bytes total; see DEBUG log for full body]"
+
     def _raise_for_status(self, response: httpx.Response) -> None:
         """Map HTTP status codes to typed exceptions."""
         if response.is_success:
             return
         status = response.status_code
-        body = response.text[:200]
+        full_body = response.text
+        if len(full_body) > self._ERROR_BODY_LIMIT:
+            logger.debug("HTTP %d full error body: %s", status, full_body)
+        body = self._truncate_body(full_body)
         if status in (401, 403):
             raise UnraidAuthError(f"HTTP {status}: {body}", status_code=status)
         if status == 404:
@@ -132,7 +147,10 @@ class BaseGraphQLClient:
         try:
             payload = response.json()
         except ValueError as exc:
-            body = response.text[:200]
+            full_body = response.text
+            if len(full_body) > self._ERROR_BODY_LIMIT:
+                logger.debug("Invalid JSON full body (HTTP %d): %s", response.status_code, full_body)
+            body = self._truncate_body(full_body)
             raise UnraidError(
                 f"Invalid JSON in response (HTTP {response.status_code}): {body}",
                 status_code=None,
@@ -144,36 +162,66 @@ class BaseGraphQLClient:
             )
         return payload
 
+    @staticmethod
+    def _extract_error_fields(
+        errors: list[Any],
+    ) -> tuple[list[str], list[dict[str, Any]], str | None, list[Any] | None, list[dict[str, Any]] | None]:
+        """Pull messages, raw entries, and the first-seen code/path/locations from a GraphQL errors list."""
+        messages: list[str] = []
+        structured: list[dict[str, Any]] = []
+        code: str | None = None
+        path: list[Any] | None = None
+        locations: list[dict[str, Any]] | None = None
+        for err in errors:
+            if not isinstance(err, dict):
+                messages.append(str(err))
+                structured.append({"message": str(err)})
+                continue
+            messages.append(str(err.get("message", "unknown error")))
+            structured.append(err)
+            if code is None:
+                extensions = err.get("extensions") or {}
+                ext_code = extensions.get("code") if isinstance(extensions, dict) else None
+                if isinstance(ext_code, str):
+                    code = ext_code
+            if path is None and isinstance(err.get("path"), list):
+                path = list(err["path"])
+            if locations is None and isinstance(err.get("locations"), list):
+                locations = [loc for loc in err["locations"] if isinstance(loc, dict)]
+        return messages, structured, code, path, locations
+
     def _check_graphql_errors(self, payload: dict[str, Any]) -> None:
         """Raise a typed exception if the response contains an ``errors`` array.
 
-        Routes via ``extensions.code`` on the first error when present:
+        Captures the structured fields the GraphQL spec guarantees on the
+        first error: ``extensions.code`` (used for routing), ``path``, and
+        ``locations``. Routes via ``extensions.code`` when present:
         ``UNAUTHENTICATED``/``FORBIDDEN`` → :class:`UnraidAuthError`,
-        ``NOT_FOUND`` → :class:`UnraidNotFoundError`. Otherwise falls back
-        to :class:`UnraidGraphQLError` with concatenated messages.
+        ``NOT_FOUND`` → :class:`UnraidNotFoundError`,
+        ``GRAPHQL_VALIDATION_FAILED`` → :class:`UnraidValidationError`.
+        Otherwise falls back to :class:`UnraidGraphQLError` with the raw
+        errors list, code, path, and locations preserved on the exception
+        so callers (logs, metrics, error mappers) can branch on them.
         """
         errors = payload.get("errors")
-        if not errors:
+        if not errors or not isinstance(errors, list):
             return
-        messages = []
-        code: str | None = None
-        for err in errors:
-            if isinstance(err, dict):
-                messages.append(err.get("message", "unknown error"))
-                if code is None:
-                    extensions = err.get("extensions") or {}
-                    if isinstance(extensions, dict):
-                        ext_code = extensions.get("code")
-                        if isinstance(ext_code, str):
-                            code = ext_code
-            else:
-                messages.append(str(err))
+        messages, structured, code, path, locations = self._extract_error_fields(errors)
         joined = "; ".join(messages)
         if code in {"UNAUTHENTICATED", "FORBIDDEN"}:
             raise UnraidAuthError(joined)
         if code == "NOT_FOUND":
             raise UnraidNotFoundError(joined)
-        raise UnraidGraphQLError(joined)
+        exc_type: type[UnraidGraphQLError] = (
+            UnraidValidationError if code == "GRAPHQL_VALIDATION_FAILED" else UnraidGraphQLError
+        )
+        raise exc_type(
+            joined,
+            code=code,
+            errors=structured,
+            path=path,
+            locations=locations,
+        )
 
     @staticmethod
     def _operation_name(payload: dict[str, Any]) -> str:
