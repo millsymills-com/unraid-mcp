@@ -21,14 +21,16 @@ class TestUnraidGetParityHistory:
 
 class TestUnraidStartParityCheck:
     async def test_default_correct_false(self, client_rw):
+        # Drift: parity mutations were regrouped under
+        # ``parityCheck.{start,pause,resume,cancel}`` and return JSON-ish.
         client, mock = client_rw
-        mock.start_parity_check.return_value = {"startParityCheck": {"state": "RUNNING"}}
+        mock.start_parity_check.return_value = {"parityCheck": {"start": True}}
         await client.call_tool("unraid_start_parity_check")
         mock.start_parity_check.assert_awaited_once_with(correct=False)
 
     async def test_correct_true_is_forwarded(self, client_rw):
         client, mock = client_rw
-        mock.start_parity_check.return_value = {"startParityCheck": {"state": "RUNNING"}}
+        mock.start_parity_check.return_value = {"parityCheck": {"start": True}}
         await client.call_tool("unraid_start_parity_check", {"correct": True})
         mock.start_parity_check.assert_awaited_once_with(correct=True)
 
@@ -41,18 +43,18 @@ class TestUnraidStartParityCheck:
 class TestParityPauseResumeCancel:
     async def test_pause_invokes_client(self, client_rw):
         client, mock = client_rw
-        mock.pause_parity_check.return_value = {"state": "PAUSED"}
+        mock.pause_parity_check.return_value = {"parityCheck": {"pause": True}}
         await client.call_tool("unraid_pause_parity_check")
         mock.pause_parity_check.assert_awaited_once()
 
     async def test_resume_invokes_client(self, client_rw):
         client, mock = client_rw
-        mock.resume_parity_check.return_value = {"state": "RUNNING"}
+        mock.resume_parity_check.return_value = {"parityCheck": {"resume": True}}
         await client.call_tool("unraid_resume_parity_check")
         mock.resume_parity_check.assert_awaited_once()
 
     async def test_cancel_invokes_client(self, client_rw):
         client, mock = client_rw
-        mock.cancel_parity_check.return_value = {"state": "IDLE"}
+        mock.cancel_parity_check.return_value = {"parityCheck": {"cancel": True}}
         await client.call_tool("unraid_cancel_parity_check")
         mock.cancel_parity_check.assert_awaited_once()

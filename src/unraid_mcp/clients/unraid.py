@@ -213,129 +213,156 @@ query Connect {
 
 # ── Mutations ───────────────────────────────────────────────────────────
 
-# Array lifecycle mutations. Stable since 2024.
+# Array lifecycle mutations.
+# Drift history: root-level ``startArray`` / ``stopArray`` were removed
+# in favor of ``array.setState(input: {desiredState: START | STOP})``
+# on Unraid API 4.32+. The return shape is the same ``ArrayState`` —
+# select ``state`` to keep the response useful to callers.
 MUTATION_START_ARRAY = """
-mutation StartArray { startArray { state } }
+mutation StartArray {
+    array { setState(input: { desiredState: START }) { state } }
+}
 """
 
-# Pairs with MUTATION_START_ARRAY. Stable since 2024.
+# Pairs with MUTATION_START_ARRAY. Same regrouping (see header).
 MUTATION_STOP_ARRAY = """
-mutation StopArray { stopArray { state } }
+mutation StopArray {
+    array { setState(input: { desiredState: STOP }) { state } }
+}
 """
 
-# Parity-check lifecycle mutations (start/pause/resume/cancel). Stable
-# since 2024 — all four return ``ArrayState`` and take no PrefixedID.
+# Parity-check lifecycle mutations (start/pause/resume/cancel).
+# Drift history: root-level ``startParityCheck`` / ``pauseParityCheck``
+# / ``resumeParityCheck`` / ``cancelParityCheck`` were removed in favor
+# of the grouped ``parityCheck.{start,pause,resume,cancel}`` shape on
+# Unraid API 4.32+. The grouped fields return a JSON-ish payload (no
+# typed selection set), so the mutation bodies have no inner braces.
 MUTATION_START_PARITY_CHECK = """
 mutation StartParityCheck($correct: Boolean) {
-    startParityCheck(correct: $correct) { state }
+    parityCheck { start(correct: $correct) }
 }
 """
 
 # Parity pause. See MUTATION_START_PARITY_CHECK header.
 MUTATION_PAUSE_PARITY_CHECK = """
-mutation PauseParityCheck { pauseParityCheck { state } }
+mutation PauseParityCheck { parityCheck { pause } }
 """
 
 # Parity resume. See MUTATION_START_PARITY_CHECK header.
 MUTATION_RESUME_PARITY_CHECK = """
-mutation ResumeParityCheck { resumeParityCheck { state } }
+mutation ResumeParityCheck { parityCheck { resume } }
 """
 
 # Parity cancel. See MUTATION_START_PARITY_CHECK header.
 MUTATION_CANCEL_PARITY_CHECK = """
-mutation CancelParityCheck { cancelParityCheck { state } }
+mutation CancelParityCheck { parityCheck { cancel } }
 """
 
-# Docker container lifecycle (start/stop/restart/pause/unpause).
-# Drift history: #59 — these took ``PrefixedID!`` (not ``ID!``) on newer
-# builds and the ``docker.restart`` field was removed; keep the ID type
-# and the nested mutation field names aligned with the live schema.
+# Docker container lifecycle (start/stop/pause/unpause).
+# Drift history: #59 — these take ``PrefixedID!`` (not ``ID!``) on
+# Unraid API 4.32+, and the ``docker.restart`` field was removed
+# entirely. The client now reimplements ``restart_container`` as a
+# client-side stop → start sequence; there's no matching mutation
+# constant for it anymore.
 MUTATION_START_CONTAINER = """
-mutation StartContainer($id: ID!) {
+mutation StartContainer($id: PrefixedID!) {
     docker { start(id: $id) { id state status } }
 }
 """
 
 # Container stop. See MUTATION_START_CONTAINER header (#59).
 MUTATION_STOP_CONTAINER = """
-mutation StopContainer($id: ID!) {
+mutation StopContainer($id: PrefixedID!) {
     docker { stop(id: $id) { id state status } }
-}
-"""
-
-# Container restart. See MUTATION_START_CONTAINER header (#59); the
-# ``docker.restart`` field was specifically called out as removed in
-# that drift report.
-MUTATION_RESTART_CONTAINER = """
-mutation RestartContainer($id: ID!) {
-    docker { restart(id: $id) { id state status } }
 }
 """
 
 # Container pause. See MUTATION_START_CONTAINER header (#59).
 MUTATION_PAUSE_CONTAINER = """
-mutation PauseContainer($id: ID!) {
+mutation PauseContainer($id: PrefixedID!) {
     docker { pause(id: $id) { id state status } }
 }
 """
 
 # Container unpause. See MUTATION_START_CONTAINER header (#59).
 MUTATION_UNPAUSE_CONTAINER = """
-mutation UnpauseContainer($id: ID!) {
+mutation UnpauseContainer($id: PrefixedID!) {
     docker { unpause(id: $id) { id state status } }
 }
 """
 
 # VM lifecycle (start/stop/pause/resume/reboot/forceStop).
-# Drift history: #60 — all six now return ``Boolean!`` on newer builds,
-# making the ``{uuid name state}`` selection sets invalid. Re-verify the
-# return shape against the live schema before changing any of them.
+# Drift history: #60 — all six return ``Boolean!`` on Unraid API 4.32+,
+# making the legacy ``{uuid name state}`` selection sets invalid; the
+# selection sets are dropped and ``$id`` is typed as ``PrefixedID!``.
+# The matching client methods normalise the response to
+# ``{"ok": bool, "id": vm_id}`` because there is no domain object to
+# return.
 MUTATION_START_VM = """
-mutation StartVm($id: ID!) { vm { start(id: $id) { uuid name state } } }
+mutation StartVm($id: PrefixedID!) { vm { start(id: $id) } }
 """
 
 # VM stop. See MUTATION_START_VM header (#60).
 MUTATION_STOP_VM = """
-mutation StopVm($id: ID!) { vm { stop(id: $id) { uuid name state } } }
+mutation StopVm($id: PrefixedID!) { vm { stop(id: $id) } }
 """
 
 # VM pause. See MUTATION_START_VM header (#60).
 MUTATION_PAUSE_VM = """
-mutation PauseVm($id: ID!) { vm { pause(id: $id) { uuid name state } } }
+mutation PauseVm($id: PrefixedID!) { vm { pause(id: $id) } }
 """
 
 # VM resume. See MUTATION_START_VM header (#60).
 MUTATION_RESUME_VM = """
-mutation ResumeVm($id: ID!) { vm { resume(id: $id) { uuid name state } } }
+mutation ResumeVm($id: PrefixedID!) { vm { resume(id: $id) } }
 """
 
 # VM reboot. See MUTATION_START_VM header (#60).
 MUTATION_REBOOT_VM = """
-mutation RebootVm($id: ID!) { vm { reboot(id: $id) { uuid name state } } }
+mutation RebootVm($id: PrefixedID!) { vm { reboot(id: $id) } }
 """
 
 # VM forceStop. See MUTATION_START_VM header (#60).
 MUTATION_FORCE_STOP_VM = """
-mutation ForceStopVm($id: ID!) { vm { forceStop(id: $id) { uuid name state } } }
+mutation ForceStopVm($id: PrefixedID!) { vm { forceStop(id: $id) } }
 """
 
-# Notification archive/delete mutations.
-# Drift history: #61 — ``ID!`` became ``PrefixedID!`` and
-# ``NotificationOverview.id`` was removed on newer builds. Update the
-# input type and the return selection in lockstep with the live schema.
+# Notification archive/delete/archive-all mutations.
+# Drift history: #61 — ``ID!`` became ``PrefixedID!``;
+# ``deleteNotification`` gained a required
+# ``type: NotificationType!`` argument so the server knows which
+# counter to decrement; ``archiveAll`` accepts an optional
+# ``importance: NotificationImportance`` filter;
+# ``NotificationOverview.id`` is gone, so return shapes select the
+# updated overview fields instead.
 MUTATION_ARCHIVE_NOTIFICATION = """
-mutation ArchiveNotification($id: ID!) { archiveNotification(id: $id) { id } }
+mutation ArchiveNotification($id: PrefixedID!) {
+    archiveNotification(id: $id) {
+        unread { total info warning alert }
+        archive { total info warning alert }
+    }
+}
 """
 
 # Notification delete. See MUTATION_ARCHIVE_NOTIFICATION header (#61).
 MUTATION_DELETE_NOTIFICATION = """
-mutation DeleteNotification($id: ID!) { deleteNotification(id: $id) { id } }
+mutation DeleteNotification($id: PrefixedID!, $type: NotificationType!) {
+    deleteNotification(id: $id, type: $type) {
+        unread { total info warning alert }
+        archive { total info warning alert }
+    }
+}
 """
 
 # Bulk-archive of notifications. See MUTATION_ARCHIVE_NOTIFICATION
-# header (#61) — same NotificationOverview.id removal risk.
+# header (#61).
 MUTATION_ARCHIVE_ALL_NOTIFICATIONS = """
-mutation ArchiveAllNotifications { archiveAll { id } }
+mutation ArchiveAllNotifications($importance: NotificationImportance) {
+    archiveAll(importance: $importance) {
+        unread { total info warning alert }
+        archive { total info warning alert }
+    }
+}
 """
 
 # Create/delete user mutations.
@@ -390,12 +417,8 @@ SCHEMA_EXPECTATIONS: dict[str, frozenset[str]] = {
     ),
     "Mutation": frozenset(
         {
-            "startArray",
-            "stopArray",
-            "startParityCheck",
-            "pauseParityCheck",
-            "resumeParityCheck",
-            "cancelParityCheck",
+            "array",
+            "parityCheck",
             "archiveNotification",
             "deleteNotification",
             "archiveAll",
@@ -405,6 +428,10 @@ SCHEMA_EXPECTATIONS: dict[str, frozenset[str]] = {
             "vm",
         },
     ),
+    "ArrayMutations": frozenset({"setState"}),
+    "ParityCheckMutations": frozenset({"start", "pause", "resume", "cancel"}),
+    "DockerMutations": frozenset({"start", "stop", "pause", "unpause"}),
+    "VmMutations": frozenset({"start", "stop", "pause", "resume", "reboot", "forceStop"}),
     # Top-level result types we select fields from
     "Disk": frozenset(
         {
@@ -442,6 +469,8 @@ SCHEMA_EXPECTATIONS: dict[str, frozenset[str]] = {
     "Vms": frozenset({"domain"}),
     "VmDomain": frozenset({"uuid", "name", "state"}),
     "Notifications": frozenset({"id", "list"}),
+    "NotificationOverview": frozenset({"unread", "archive"}),
+    "NotificationCounts": frozenset({"total", "info", "warning", "alert"}),
     "Notification": frozenset(
         {
             "id",
@@ -729,8 +758,17 @@ class UnraidClient(BaseGraphQLClient):
         return await self.mutate(MUTATION_STOP_CONTAINER, variables={"id": container_id})
 
     async def restart_container(self, container_id: str) -> dict[str, Any]:
-        """Restart a Docker container by ID."""
-        return await self.mutate(MUTATION_RESTART_CONTAINER, variables={"id": container_id})
+        """Restart a Docker container by ID.
+
+        ``docker.restart`` was removed from the live schema in #59, so the
+        client implements restart as a stop → start sequence on the
+        caller's behalf. The returned payload merges both mutation
+        responses under ``stop`` and ``start`` keys so callers still see
+        the underlying GraphQL data when they need it.
+        """
+        stop = await self.stop_container(container_id)
+        start = await self.start_container(container_id)
+        return {"stop": stop, "start": start}
 
     async def pause_container(self, container_id: str) -> dict[str, Any]:
         """Pause a Docker container by ID."""
@@ -742,29 +780,42 @@ class UnraidClient(BaseGraphQLClient):
 
     # ── Write methods: VMs ──────────────────────────────────────────────
 
+    async def _vm_mutate(self, mutation: str, action: str, vm_id: str) -> dict[str, Any]:
+        """Run a VM lifecycle mutation and normalize the ``Boolean!`` payload.
+
+        Every VM mutation now returns ``Boolean!`` (#60), so the client
+        flattens the response to ``{"ok": bool, "id": vm_id}`` — there's
+        no domain object to return and callers still need to know which
+        VM they acted on.
+        """
+        result = await self.mutate(mutation, variables={"id": vm_id})
+        vm_block = result.get("vm") if isinstance(result, dict) else None
+        ok = vm_block.get(action) if isinstance(vm_block, dict) else None
+        return {"ok": bool(ok), "id": vm_id}
+
     async def start_vm(self, vm_id: str) -> dict[str, Any]:
         """Start a VM by UUID."""
-        return await self.mutate(MUTATION_START_VM, variables={"id": vm_id})
+        return await self._vm_mutate(MUTATION_START_VM, "start", vm_id)
 
     async def stop_vm(self, vm_id: str) -> dict[str, Any]:
         """Gracefully stop a VM by UUID."""
-        return await self.mutate(MUTATION_STOP_VM, variables={"id": vm_id})
+        return await self._vm_mutate(MUTATION_STOP_VM, "stop", vm_id)
 
     async def pause_vm(self, vm_id: str) -> dict[str, Any]:
         """Pause a running VM by UUID."""
-        return await self.mutate(MUTATION_PAUSE_VM, variables={"id": vm_id})
+        return await self._vm_mutate(MUTATION_PAUSE_VM, "pause", vm_id)
 
     async def resume_vm(self, vm_id: str) -> dict[str, Any]:
         """Resume a paused VM by UUID."""
-        return await self.mutate(MUTATION_RESUME_VM, variables={"id": vm_id})
+        return await self._vm_mutate(MUTATION_RESUME_VM, "resume", vm_id)
 
     async def reboot_vm(self, vm_id: str) -> dict[str, Any]:
         """Reboot a VM by UUID."""
-        return await self.mutate(MUTATION_REBOOT_VM, variables={"id": vm_id})
+        return await self._vm_mutate(MUTATION_REBOOT_VM, "reboot", vm_id)
 
     async def force_stop_vm(self, vm_id: str) -> dict[str, Any]:
         """Force-stop a VM by UUID (equivalent to pulling the plug)."""
-        return await self.mutate(MUTATION_FORCE_STOP_VM, variables={"id": vm_id})
+        return await self._vm_mutate(MUTATION_FORCE_STOP_VM, "forceStop", vm_id)
 
     # ── Write methods: notifications ────────────────────────────────────
 
@@ -772,13 +823,34 @@ class UnraidClient(BaseGraphQLClient):
         """Archive a notification by ID."""
         return await self.mutate(MUTATION_ARCHIVE_NOTIFICATION, variables={"id": notification_id})
 
-    async def delete_notification(self, notification_id: str) -> dict[str, Any]:
-        """Delete a notification by ID."""
-        return await self.mutate(MUTATION_DELETE_NOTIFICATION, variables={"id": notification_id})
+    async def delete_notification(
+        self,
+        notification_id: str,
+        notification_type: str = "UNREAD",
+    ) -> dict[str, Any]:
+        """Delete a notification by ID.
 
-    async def archive_all_notifications(self) -> dict[str, Any]:
-        """Archive all notifications."""
-        return await self.mutate(MUTATION_ARCHIVE_ALL_NOTIFICATIONS)
+        Args:
+            notification_id: Notification ID (``PrefixedID``).
+            notification_type: Which bin holds the entry — ``UNREAD``
+                (default) or ``ARCHIVE``. Required by the live schema so
+                the server can decrement the correct counter (#61).
+        """
+        return await self.mutate(
+            MUTATION_DELETE_NOTIFICATION,
+            variables={"id": notification_id, "type": notification_type},
+        )
+
+    async def archive_all_notifications(self, importance: str | None = None) -> dict[str, Any]:
+        """Archive all notifications.
+
+        Args:
+            importance: Optional ``NotificationImportance`` filter —
+                limits the bulk archive to entries at that importance
+                (``INFO`` / ``WARNING`` / ``ALERT``). Omit to archive
+                every active notification.
+        """
+        return await self.mutate(MUTATION_ARCHIVE_ALL_NOTIFICATIONS, variables={"importance": importance})
 
     # ── Write methods: users ────────────────────────────────────────────
 

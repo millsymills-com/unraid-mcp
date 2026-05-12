@@ -68,6 +68,17 @@ class TestWriteContainerOps:
         await client.call_tool(tool_name, {"container_id": "abc"})
         getattr(mock, client_method).assert_awaited_once_with("abc")
 
+    async def test_restart_tool_returns_client_payload(self, client_rw):
+        # Drift #59: ``docker.restart`` is gone; the client reimplements
+        # restart as stop → start and returns the merged payload.
+        client, mock = client_rw
+        mock.restart_container.return_value = {
+            "stop": {"docker": {"stop": {"id": "abc"}}},
+            "start": {"docker": {"start": {"id": "abc"}}},
+        }
+        result = await client.call_tool("unraid_restart_container", {"container_id": "abc"})
+        assert set(result.structured_content.keys()) == {"stop", "start"}
+
     async def test_write_tool_hidden_in_readonly(self, client_ro):
         client, _ = client_ro
         with pytest.raises(ToolError, match="Unknown tool"):

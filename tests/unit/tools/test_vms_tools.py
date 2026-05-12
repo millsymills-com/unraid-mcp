@@ -28,11 +28,14 @@ class TestWriteVmOps:
             ("unraid_reboot_vm", "reboot_vm"),
         ],
     )
-    async def test_write_tool_forwards_id(self, client_rw, tool_name, client_method):
+    async def test_write_tool_forwards_id_and_returns_ok_shape(self, client_rw, tool_name, client_method):
+        # Drift #60: VM mutations return ``Boolean!`` — the client
+        # normalises to ``{"ok": bool, "id": vm_id}``.
         client, mock = client_rw
-        getattr(mock, client_method).return_value = {"vm": {"start": {"uuid": "u1"}}}
-        await client.call_tool(tool_name, {"vm_id": "u1"})
+        getattr(mock, client_method).return_value = {"ok": True, "id": "u1"}
+        result = await client.call_tool(tool_name, {"vm_id": "u1"})
         getattr(mock, client_method).assert_awaited_once_with("u1")
+        assert result.structured_content == {"ok": True, "id": "u1"}
 
     async def test_force_stop_hidden_in_readonly(self, client_ro):
         client, _ = client_ro
