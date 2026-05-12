@@ -301,6 +301,62 @@ class TestRestartContainer:
         assert second["variables"] == {"id": "abc"}
         assert set(result.keys()) == {"stop", "start"}
 
+    @respx.mock
+    async def test_restart_container_returns_merged_stop_and_start_payloads(self, client):
+        # Issue #164: success path must surface both underlying mutation
+        # responses under their respective keys so callers can inspect
+        # the GraphQL data from each step.
+        stop_payload = {"docker": {"stop": {"id": "abc", "state": "exited", "status": "Exited"}}}
+        start_payload = {"docker": {"start": {"id": "abc", "state": "running", "status": "Up"}}}
+        responses = [
+            httpx.Response(200, json={"data": stop_payload}),
+            httpx.Response(200, json={"data": start_payload}),
+        ]
+        respx.post(GRAPHQL_URL).mock(side_effect=responses)
+        result = await client.restart_container("abc")
+        assert result == {"stop": stop_payload, "start": start_payload}
+
+    @respx.mock
+    async def test_restart_container_raises_with_partial_failure_message_when_start_fails(self, client):
+        # Issue #164: if stop succeeds but start fails, the container is
+        # left stopped — the raised UnraidError must say so and chain
+        # the original via __cause__ so operators can trace the
+        # underlying GraphQL failure.
+        stop_payload = {"docker": {"stop": {"id": "abc", "state": "exited", "status": "Exited"}}}
+        responses = [
+            httpx.Response(200, json={"data": stop_payload}),
+            httpx.Response(
+                200,
+                json={"errors": [{"message": "docker daemon refused start"}]},
+            ),
+        ]
+        route = respx.post(GRAPHQL_URL).mock(side_effect=responses)
+        with pytest.raises(UnraidError, match="was stopped successfully") as exc_info:
+            await client.restart_container("abc")
+        assert route.call_count == 2
+        assert "unraid_start_container" in str(exc_info.value)
+        assert "'abc'" in str(exc_info.value)
+        # Original GraphQL failure must be chained for diagnostics.
+        assert isinstance(exc_info.value.__cause__, UnraidError)
+
+    @respx.mock
+    async def test_restart_container_propagates_stop_failure_unchanged(self, client):
+        # Issue #164: when the stop itself fails there is no partial
+        # state to report — the underlying exception must propagate
+        # unchanged (no rewrap, no "was stopped successfully" message),
+        # and the start mutation must never be issued.
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={"errors": [{"message": "docker daemon refused stop"}]},
+            ),
+        )
+        with pytest.raises(UnraidError) as exc_info:
+            await client.restart_container("abc")
+        assert route.call_count == 1
+        assert "was stopped successfully" not in str(exc_info.value)
+        assert "docker daemon refused stop" in str(exc_info.value)
+
 
 class TestStartParityCheck:
     @respx.mock

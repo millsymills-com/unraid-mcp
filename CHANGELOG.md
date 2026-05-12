@@ -120,6 +120,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     opt-in) plus `limit` / `offset` pagination (#58).
 
 ### Changed
+- `UnraidClient.restart_container` (and the `unraid_restart_container`
+  tool) now signals partial failure when the client-side stop → start
+  sequence (#59) only completes the stop. If the stop succeeds but the
+  subsequent start raises, the client now wraps the start error in an
+  `UnraidError` that names the container, states the stop already
+  completed, and points operators at `unraid_start_container` for
+  roll-forward; the original exception is chained via `__cause__`. The
+  tool docstring is updated to describe the
+  `{"stop": ..., "start": ...}` return shape and the partial-failure
+  semantics. Failures during the stop itself propagate unchanged
+  because there is no partial state to report (#164).
 - Schema-probe workflow (`.github/workflows/schema-probe.yml`) now
   publishes drift output to `$GITHUB_STEP_SUMMARY` on failure and
   auto-creates / updates a GitHub issue labelled `bug,schema-drift`
