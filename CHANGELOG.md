@@ -14,6 +14,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   disable the workflow if a fork doesn't operate a test server (#153).
 
 ### Fixed
+- Schema-probe workflow (`.github/workflows/schema-probe.yml`) now
+  selects the oldest open `schema-drift` issue for dedup by adding
+  `--search "sort:created-asc"` to the `gh issue list` call.
+  `gh issue list` defaults to `sort:created-desc`, so the previous
+  query returned the newest issue, contradicting the documented intent
+  of reusing the issue with accumulated history (#159).
 - Reverted `Disk.size` from `int | None` back to `str | None` to match
   `ArrayDisk.size` and `Share.size`. Unraid byte scalars serialize as
   JSON strings and non-numeric values (`"4 TB"`, `"-"`) would have
