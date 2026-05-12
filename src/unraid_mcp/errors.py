@@ -46,15 +46,15 @@ class UnraidNotConfiguredError(UnraidError):
     """API key was not configured but a tool was called."""
 
 
-_ERROR_TEMPLATES: tuple[tuple[type[UnraidError], str], ...] = (
-    (UnraidAuthError, "Authentication failed: {error}. Check your API key."),
-    (UnraidNotFoundError, "Resource not found: {error}"),
-    (UnraidRateLimitError, "Rate limit exceeded: {error}. Try again later."),
-    (UnraidConnectionError, "Connection failed: {error}. Check host and network."),
-    (UnraidReadOnlyError, "Write operation blocked: {error}. Server is in read-only mode."),
-    (UnraidNotConfiguredError, "Unraid API not configured: {error}. Set UNRAID_API_KEY."),
-    (UnraidGraphQLError, "GraphQL error: {error}"),
-    (UnraidError, "Unraid API error: {error}"),
+_ERROR_TEMPLATES: tuple[tuple[type[UnraidError], str, int], ...] = (
+    (UnraidAuthError, "Authentication failed: {error}. Check your API key.", logging.WARNING),
+    (UnraidNotFoundError, "Resource not found: {error}", logging.WARNING),
+    (UnraidRateLimitError, "Rate limit exceeded: {error}. Try again later.", logging.WARNING),
+    (UnraidConnectionError, "Connection failed: {error}. Check host and network.", logging.ERROR),
+    (UnraidReadOnlyError, "Write operation blocked: {error}. Server is in read-only mode.", logging.WARNING),
+    (UnraidNotConfiguredError, "Unraid API not configured: {error}. Set UNRAID_API_KEY.", logging.WARNING),
+    (UnraidGraphQLError, "GraphQL error: {error}", logging.WARNING),
+    (UnraidError, "Unraid API error: {error}", logging.ERROR),
 )
 
 
@@ -63,6 +63,8 @@ def _classify_error(error: Exception) -> ToolError:
 
     Centralised so every tool surfaces the same agent-readable wording for a
     given failure mode and so the error-code mapping lives in one place.
+    Each typed branch also emits a log record before returning so operators
+    tailing the server log see every failure, not just the unexpected ones.
 
     Args:
         error: The exception raised inside the tool body.
@@ -73,8 +75,9 @@ def _classify_error(error: Exception) -> ToolError:
     """
     if isinstance(error, ToolError):
         return error
-    for exc_type, template in _ERROR_TEMPLATES:
+    for exc_type, template, level in _ERROR_TEMPLATES:
         if isinstance(error, exc_type):
+            logger.log(level, "%s: %s", type(error).__name__, error)
             return ToolError(template.format(error=error))
     logger.exception("Unexpected error in tool execution")
     return ToolError(f"Unexpected error: {error}")
