@@ -13,9 +13,18 @@ name: Schema Probe
 #
 # The workflow exits cleanly when secrets are missing so a fresh clone can
 # install the workflow without a failing required check.
+#
+# On drift detection (probe exits non-zero), the workflow auto-creates or
+# updates a GitHub issue with the drift report (#152). Suppress that step
+# by dispatching the workflow manually with suppress_issue=true.
 
 on:
   workflow_dispatch:
+    inputs:
+      suppress_issue:
+        description: "Skip auto-issue creation on drift (for forks)"
+        type: boolean
+        default: false
   schedule:
     - cron: "0 7 * * *"
 
@@ -25,6 +34,7 @@ concurrency:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   probe:
@@ -66,6 +76,7 @@ jobs:
         run: uv sync
 
       - name: Run schema-compatibility probe
+        id: probe
         if: steps.secrets.outputs.configured == 'true'
         env:
           UNRAID_HOST: ${{ secrets.UNRAID_HOST }}
@@ -73,4 +84,73 @@ jobs:
           UNRAID_PORT: ${{ secrets.UNRAID_PORT }}
           UNRAID_USE_HTTPS: ${{ secrets.UNRAID_USE_HTTPS }}
           UNRAID_VERIFY_SSL: ${{ secrets.UNRAID_VERIFY_SSL }}
-        run: uv run unraid-mcp --check-schema
+        # Capture stdout+stderr so we can surface them on failure without
+        # losing the original exit status (set -o pipefail keeps tee out of
+        # the way).
+        run: |
+          set -o pipefail
+          uv run unraid-mcp --check-schema 2>&1 | tee probe.log
+        continue-on-error: true
+
+      - name: Publish drift report to step summary
+        if: steps.secrets.outputs.configured == 'true' && steps.probe.outcome == 'failure'
+        run: |
+          {
+            echo "## Schema drift detected"
+            echo ""
+            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo ""
+            echo '```'
+            cat probe.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Ensure schema-drift label exists
+        if: >-
+          steps.secrets.outputs.configured == 'true'
+          && steps.probe.outcome == 'failure'
+          && inputs.suppress_issue != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # --force makes the label idempotent: creates if missing, updates
+          # description/colour if already present. Tolerate failure so the
+          # workflow's final exit status reflects the probe, not gh quirks.
+          gh label create schema-drift \
+            --color d73a4a \
+            --description "Detected by nightly schema probe (#152)" \
+            --force || true
+
+      - name: File or update drift issue
+        if: >-
+          steps.secrets.outputs.configured == 'true'
+          && steps.probe.outcome == 'failure'
+          && inputs.suppress_issue != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # De-duplicate: reuse the oldest open `schema-drift` issue if one
+          # exists, otherwise file a new one. Cap probe.log to keep the
+          # comment under GitHub's body-size ceiling.
+          LOG=$(head -c 50000 probe.log)
+          # shellcheck disable=SC2016  # printf format is intentionally literal; values flow through %s args.
+          BODY=$(printf '## Schema drift detected\n\nRun: %s\n\n```\n%s\n```\n' "$RUN_URL" "$LOG")
+
+          existing=$(gh issue list --label schema-drift --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$BODY" || true
+            echo "::notice::Appended drift report to issue #$existing"
+          else
+            gh issue create \
+              --title "Schema drift detected (probe run ${{ github.run_id }})" \
+              --label "bug,schema-drift" \
+              --body "$BODY" \
+            || true
+          fi
+
+      - name: Fail the job on probe drift
+        # Preserve the original red-check semantics so branch protection /
+        # required-status-check workflows still see drift as a failure.
+        if: steps.secrets.outputs.configured == 'true' && steps.probe.outcome == 'failure'
+        run: exit 1
