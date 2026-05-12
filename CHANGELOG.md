@@ -107,6 +107,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     opt-in) plus `limit` / `offset` pagination (#58).
 
 ### Changed
+- Tightened the `notification_type` and `importance` parameters on
+  `unraid_list_notifications`, `unraid_delete_notification`, and
+  `unraid_archive_all_notifications` from bare `str` to
+  `Literal["UNREAD", "ARCHIVE"]` and
+  `Literal["INFO", "WARNING", "ALERT"]` aliases exported from
+  `unraid_mcp.models.notifications`. FastMCP now renders these as
+  JSON-Schema `enum` constraints so invalid values are rejected at
+  the MCP boundary instead of being forwarded to the Unraid
+  GraphQL API (#165).
 - Schema-probe workflow (`.github/workflows/schema-probe.yml`) now
   publishes drift output to `$GITHUB_STEP_SUMMARY` on failure and
   auto-creates / updates a GitHub issue labelled `bug,schema-drift`

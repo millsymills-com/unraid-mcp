@@ -498,6 +498,65 @@ class TestNotificationMutations:
         assert sent["variables"] == {"importance": "WARNING"}
 
 
+class TestNotificationLiteralRoundTrip:
+    """Happy-path coverage for every accepted ``NotificationType`` /
+    ``NotificationImportance`` literal value (#165).
+
+    Confirms the tightened ``Literal`` type aliases on the client
+    methods don't regress runtime behaviour for any valid value.
+    """
+
+    @respx.mock
+    @pytest.mark.parametrize("ntype", ["UNREAD", "ARCHIVE"])
+    async def test_list_notifications_accepts_every_type(self, client, ntype):
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(200, json={"data": {"notifications": {"id": "wrap", "list": []}}}),
+        )
+        await client.list_notifications(notification_type=ntype)
+        sent = json.loads(route.calls[0].request.content)
+        assert sent["variables"]["type"] == ntype
+
+    @respx.mock
+    @pytest.mark.parametrize("ntype", ["UNREAD", "ARCHIVE"])
+    async def test_delete_notification_accepts_every_type(self, client, ntype):
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "deleteNotification": {
+                            "unread": {"total": 0, "info": 0, "warning": 0, "alert": 0},
+                            "archive": {"total": 0, "info": 0, "warning": 0, "alert": 0},
+                        },
+                    },
+                },
+            )
+        )
+        await client.delete_notification("n1", notification_type=ntype)
+        sent = json.loads(route.calls[0].request.content)
+        assert sent["variables"] == {"id": "n1", "type": ntype}
+
+    @respx.mock
+    @pytest.mark.parametrize("importance", ["INFO", "WARNING", "ALERT"])
+    async def test_archive_all_accepts_every_importance(self, client, importance):
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "archiveAll": {
+                            "unread": {"total": 0, "info": 0, "warning": 0, "alert": 0},
+                            "archive": {"total": 1, "info": 0, "warning": 0, "alert": 0},
+                        },
+                    },
+                },
+            )
+        )
+        await client.archive_all_notifications(importance=importance)
+        sent = json.loads(route.calls[0].request.content)
+        assert sent["variables"] == {"importance": importance}
+
+
 class TestGetMe:
     @respx.mock
     async def test_get_me_returns_user_model(self, client):
