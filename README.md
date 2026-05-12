@@ -48,6 +48,13 @@ Detected 2 schema-drift issue(s):
   • Mutation.array.startArray: argument `force` removed
 ```
 
+## Operational notes
+
+- **Read-only by default.** `UNRAID_MODE` defaults to `readonly`; write tools (start/stop/restart, parity controls, user mutations) are hidden until you set `UNRAID_MODE=readwrite`. The mode is also re-checked at call time, so a forgotten env var can't quietly expose writes.
+- **TLS verification on by default.** `UNRAID_VERIFY_SSL=true`. Set it to `false` only on trusted networks with self-signed certs — a forged cert can intercept your API key and proxy mutations through your client.
+- **GraphQL must be enabled in Unraid.** The endpoint at `/graphql` is gated behind **Settings → Management Access → Developer Options** in the Unraid WebGUI; enable it once per server before the MCP client connects.
+- **User mutations are double-gated.** Even in `readwrite` mode, `unraid_create_user` / `unraid_delete_user` stay hidden until `UNRAID_ALLOW_USER_MUTATIONS=true`.
+
 ## MCP client setup
 
 `unraid-mcp` speaks MCP over stdio. Point any compatible client at the installed console script and pass your Unraid settings through the `env` block.
