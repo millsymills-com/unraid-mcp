@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from fastmcp import Context, FastMCP
 
-from unraid_mcp.errors import UnraidNotFoundError
 from unraid_mcp.models.shares import Share
 from unraid_mcp.tools._helpers import require_client, unraid_tool
 
@@ -37,8 +36,4 @@ def register_share_tools(mcp: FastMCP) -> None:
             ``Share`` model for the matching share.
         """
         client = require_client(ctx)
-        shares = await client.list_shares()
-        for share in shares:
-            if share.name == name:
-                return share
-        raise UnraidNotFoundError(f"Share '{name}' not found")
+        return await client.get_share(name)

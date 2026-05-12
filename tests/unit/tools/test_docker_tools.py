@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from fastmcp.exceptions import ToolError
 
+from unraid_mcp.errors import UnraidNotFoundError
 from unraid_mcp.models.docker import DockerContainer, DockerNetwork
 
 
@@ -21,24 +22,19 @@ class TestListContainers:
 
 
 class TestGetContainer:
-    async def test_lookup_by_id(self, client_rw):
+    async def test_lookup_delegates_to_client(self, client_rw):
+        # Tool layer should issue the singular client call directly —
+        # list-then-filter has moved inside :meth:`UnraidClient.get_container`
+        # so the lookup is O(1) when the live schema exposes ``Docker.container``.
         client, mock = client_rw
-        mock.list_containers.return_value = [
-            DockerContainer(id="abc", names=["/plex"]),
-            DockerContainer(id="def", names=["/sonarr"]),
-        ]
+        mock.get_container.return_value = DockerContainer(id="def", names=["/sonarr"])
         result = await client.call_tool("unraid_get_container", {"container_id": "def"})
         assert result.structured_content["id"] == "def"
-
-    async def test_lookup_by_name_strips_leading_slash(self, client_rw):
-        client, mock = client_rw
-        mock.list_containers.return_value = [DockerContainer(id="abc", names=["/plex"])]
-        result = await client.call_tool("unraid_get_container", {"container_id": "plex"})
-        assert result.structured_content["id"] == "abc"
+        mock.get_container.assert_awaited_once_with("def")
 
     async def test_miss_raises_not_found(self, client_rw):
         client, mock = client_rw
-        mock.list_containers.return_value = [DockerContainer(id="abc", names=["/plex"])]
+        mock.get_container.side_effect = UnraidNotFoundError("Container 'nope' not found")
         with pytest.raises(ToolError, match="Resource not found"):
             await client.call_tool("unraid_get_container", {"container_id": "nope"})
 
