@@ -22,7 +22,7 @@ from typing import Any
 import httpx
 
 from unraid_mcp.clients.base import BaseGraphQLClient
-from unraid_mcp.errors import UnraidConnectionError, UnraidError
+from unraid_mcp.errors import UnraidConnectionError, UnraidError, UnraidNotFoundError, UnraidValidationError
 from unraid_mcp.models.array import ArrayState, ParityHistoryEntry
 from unraid_mcp.models.disks import Disk
 from unraid_mcp.models.docker import DockerContainer, DockerNetwork
@@ -103,6 +103,20 @@ query Disks {
 }
 """
 
+# Single physical disk by ID — O(1) on schemas that expose ``Query.disk``
+# (Unraid API 4.32+). Same field set as :data:`QUERY_DISKS` so callers see
+# the same shape regardless of which path served the lookup. Falls back to
+# list-then-filter at the client method level when the server rejects the
+# query with ``GRAPHQL_VALIDATION_FAILED``, so older schemas keep working
+# without a flag. ``$id`` is ``PrefixedID!`` to match ``Disk.id``.
+QUERY_DISK_BY_ID = """
+query DiskById($id: PrefixedID!) {
+    disk(id: $id) {
+        id name device type vendor size temperature interfaceType serialNum smartStatus isSpinning
+    }
+}
+"""
+
 # Docker container roster + port mappings.
 # Drift history: #55 — top-level ``Query.dockerContainers`` was removed
 # in favor of a grouped ``docker.containers`` shape on Unraid API 4.32+,
@@ -112,6 +126,23 @@ QUERY_DOCKER_CONTAINERS = """
 query DockerContainers {
     docker {
         containers {
+            id names image imageId command created state status
+            autoStart
+            ports { ip privatePort publicPort type }
+        }
+    }
+}
+"""
+
+# Single Docker container by ID — O(1) on schemas that expose
+# ``Docker.container`` (Unraid API 4.32+). Same field set as the list
+# variant so callers see the same shape regardless of which path served
+# the lookup. The client falls back to list-then-filter on
+# ``GRAPHQL_VALIDATION_FAILED`` so older schemas keep working.
+QUERY_CONTAINER_BY_ID = """
+query ContainerById($id: PrefixedID!) {
+    docker {
+        container(id: $id) {
             id names image imageId command created state status
             autoStart
             ports { ip privatePort publicPort type }
@@ -427,7 +458,7 @@ SCHEMA_EXPECTATIONS: dict[str, frozenset[str]] = {
             "isSpinning",
         },
     ),
-    "Docker": frozenset({"containers", "networks"}),
+    "Docker": frozenset({"containers", "container", "networks"}),
     "DockerContainer": frozenset(
         {
             "id",
@@ -590,6 +621,36 @@ class UnraidClient(BaseGraphQLClient):
         result = await self.query(QUERY_DISKS)
         return [Disk.model_validate(disk) for disk in _require_list(result, "disks")]
 
+    async def get_disk(self, disk_id: str) -> Disk:
+        """Get a single physical disk by ID or name.
+
+        Issues the O(1) ``Query.disk(id:)`` singular query on Unraid API
+        4.32+ schemas; on validation failure (older schemas without the
+        singular field) falls back to :meth:`list_disks` + linear scan.
+        Both paths raise :class:`UnraidNotFoundError` when no disk matches.
+
+        ``Query.disk`` is keyed on ``Disk.id`` only. The fallback path also
+        matches against ``Disk.name`` for parity with the legacy tool
+        behaviour, so callers can keep passing either identifier.
+        """
+        try:
+            result = await self.query(QUERY_DISK_BY_ID, variables={"id": disk_id})
+        except UnraidValidationError:
+            return self._find_disk_in_list(await self.list_disks(), disk_id)
+        disk = result.get("disk")
+        if disk is None:
+            return self._find_disk_in_list(await self.list_disks(), disk_id)
+        if not isinstance(disk, dict):
+            raise UnraidError(f"Expected dict for 'disk' in GraphQL response, got {type(disk).__name__}")
+        return Disk.model_validate(disk)
+
+    @staticmethod
+    def _find_disk_in_list(disks: list[Disk], disk_id: str) -> Disk:
+        for disk in disks:
+            if disk_id in (disk.id, disk.name):
+                return disk
+        raise UnraidNotFoundError(f"Disk with id '{disk_id}' not found")
+
     async def list_containers(self) -> list[DockerContainer]:
         """List all Docker containers.
 
@@ -608,6 +669,47 @@ class UnraidClient(BaseGraphQLClient):
                 f"Expected list for 'docker.containers' in GraphQL response, got {type(containers).__name__}",
             )
         return [DockerContainer.model_validate(c) for c in containers]
+
+    async def get_container(self, container_id: str) -> DockerContainer:
+        """Get a single Docker container by ID or name.
+
+        Issues the O(1) ``Docker.container(id:)`` singular query on Unraid
+        API 4.32+ schemas; on validation failure (older schemas without the
+        singular field) falls back to :meth:`list_containers` + linear scan.
+        Both paths raise :class:`UnraidNotFoundError` when no container
+        matches.
+
+        ``Docker.container`` is keyed on ``DockerContainer.id`` only. The
+        fallback path also matches against the ``names`` array (with leading
+        slashes stripped) for parity with the legacy tool behaviour, so
+        callers can keep passing either an ID or a container name.
+        """
+        try:
+            result = await self.query(QUERY_CONTAINER_BY_ID, variables={"id": container_id})
+        except UnraidValidationError:
+            return self._find_container_in_list(await self.list_containers(), container_id)
+        docker = result.get("docker")
+        if not isinstance(docker, dict):
+            return self._find_container_in_list(await self.list_containers(), container_id)
+        container = docker.get("container")
+        if container is None:
+            return self._find_container_in_list(await self.list_containers(), container_id)
+        if not isinstance(container, dict):
+            raise UnraidError(
+                f"Expected dict for 'docker.container' in GraphQL response, got {type(container).__name__}",
+            )
+        return DockerContainer.model_validate(container)
+
+    @staticmethod
+    def _find_container_in_list(containers: list[DockerContainer], container_id: str) -> DockerContainer:
+        target = container_id.lstrip("/")
+        for container in containers:
+            if container.id == container_id:
+                return container
+            names = container.names or []
+            if any(name.lstrip("/") == target for name in names):
+                return container
+        raise UnraidNotFoundError(f"Container '{container_id}' not found")
 
     async def list_docker_networks(self) -> list[DockerNetwork]:
         """List Docker networks.
@@ -640,6 +742,20 @@ class UnraidClient(BaseGraphQLClient):
         """List user shares."""
         result = await self.query(QUERY_SHARES)
         return [Share.model_validate(share) for share in _require_list(result, "shares")]
+
+    async def get_share(self, name: str) -> Share:
+        """Get a single user share by name.
+
+        The live Unraid GraphQL schema does not expose a singular ``share``
+        query (only ``shares``), so this method always lists and filters.
+        Kept on the client surface for symmetry with :meth:`get_disk` and
+        :meth:`get_container` and so the tool layer can call it without
+        leaking the list-and-scan detail.
+        """
+        for share in await self.list_shares():
+            if share.name == name:
+                return share
+        raise UnraidNotFoundError(f"Share '{name}' not found")
 
     async def get_me(self) -> User:
         """Get the currently-authenticated Unraid user account.
