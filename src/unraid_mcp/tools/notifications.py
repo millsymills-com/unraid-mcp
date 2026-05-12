@@ -54,28 +54,42 @@ def register_notification_tools(mcp: FastMCP) -> None:
         return await client.archive_notification(notification_id)
 
     @unraid_tool(mcp, tags={"write", "notifications"}, annotations={"readOnlyHint": False, "destructiveHint": True})
-    async def unraid_delete_notification(ctx: Context, notification_id: str) -> dict[str, Any]:
+    async def unraid_delete_notification(
+        ctx: Context,
+        notification_id: str,
+        notification_type: str = "UNREAD",
+    ) -> dict[str, Any]:
         """Permanently delete a notification by ID.
 
         Args:
             ctx: FastMCP request context.
             notification_id: Notification ID.
+            notification_type: Which bin holds the entry — ``UNREAD``
+                (default) or ``ARCHIVE``. Required by the Unraid API
+                4.32+ schema so the server can decrement the correct
+                counter (#61).
 
         Returns:
             Raw GraphQL mutation response payload.
         """
         client = require_readwrite(ctx, "delete notification")
-        return await client.delete_notification(notification_id)
+        return await client.delete_notification(notification_id, notification_type=notification_type)
 
     @unraid_tool(mcp, tags={"write", "notifications"}, annotations={"readOnlyHint": False, "destructiveHint": True})
-    async def unraid_archive_all_notifications(ctx: Context) -> dict[str, Any]:
+    async def unraid_archive_all_notifications(
+        ctx: Context,
+        importance: str | None = None,
+    ) -> dict[str, Any]:
         """Archive all active notifications.
 
         Args:
             ctx: FastMCP request context.
+            importance: Optional ``NotificationImportance`` filter
+                (``INFO`` / ``WARNING`` / ``ALERT``). When omitted all
+                active notifications are archived (#61).
 
         Returns:
             Raw GraphQL mutation response payload.
         """
         client = require_readwrite(ctx, "archive all notifications")
-        return await client.archive_all_notifications()
+        return await client.archive_all_notifications(importance=importance)

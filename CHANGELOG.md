@@ -14,6 +14,42 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   disable the workflow if a fork doesn't operate a test server (#153).
 
 ### Fixed
+- Aligned the Docker, VM, notification, array, and parity write
+  mutations with the Unraid API 4.32+ schema. `SCHEMA_EXPECTATIONS`
+  is updated in lockstep so `unraid-mcp --check-schema` keeps catching
+  drift at boot.
+  - Docker write mutations (`unraid_start_container`,
+    `unraid_stop_container`, `unraid_pause_container`,
+    `unraid_unpause_container`): `$id` retyped from `ID!` to
+    `PrefixedID!`. `unraid_restart_container` is reimplemented as a
+    client-side stop → start because `docker.restart` was removed
+    from the schema; the tool now returns the merged
+    `{"stop": ..., "start": ...}` payload (#59).
+  - Array lifecycle mutations (`unraid_start_array`,
+    `unraid_stop_array`): root-level `startArray` / `stopArray` were
+    removed; replaced with `array.setState(input: {desiredState:
+    START | STOP})` and the matching `SCHEMA_EXPECTATIONS["Mutation"]`
+    / `ArrayMutations` entries.
+  - Parity mutations (`unraid_start_parity_check`,
+    `unraid_pause_parity_check`, `unraid_resume_parity_check`,
+    `unraid_cancel_parity_check`): root-level mutations were removed;
+    replaced with `parityCheck.{start,pause,resume,cancel}` (JSON-ish
+    return, no selection set).
+  - VM write mutations (all six): the mutations now return
+    `Boolean!`, so the `{uuid name state}` selection sets are dropped
+    and `$id` is retyped to `PrefixedID!`. Client methods normalise
+    the response to `{"ok": bool, "id": vm_id}` since there's no
+    domain object to surface (#60).
+  - Notification write mutations: `$id` is `PrefixedID!`.
+    `deleteNotification` gained a required `type: NotificationType!`
+    argument so the server knows which bin's counter to decrement —
+    `unraid_delete_notification` takes a new `notification_type`
+    parameter (default `UNREAD`). `archiveAll` accepts an optional
+    `importance: NotificationImportance` filter exposed on
+    `unraid_archive_all_notifications` as the `importance` parameter.
+    Return selections track the updated `NotificationOverview`
+    (`unread { total info warning alert } archive { ... }`) instead
+    of the removed `id` field (#61).
 - Schema-probe workflow (`.github/workflows/schema-probe.yml`) now
   selects the oldest open `schema-drift` issue for dedup by adding
   `--search "sort:created-asc"` to the `gh issue list` call.

@@ -18,11 +18,13 @@ class TestUnraidGetArray:
 
 class TestUnraidStartArray:
     async def test_rw_mode_invokes_client(self, client_rw):
+        # Drift: array lifecycle was regrouped under
+        # ``array.setState(input: {desiredState: START | STOP})``.
         client, mock = client_rw
-        mock.start_array.return_value = {"startArray": {"state": "STARTED"}}
+        mock.start_array.return_value = {"array": {"setState": {"state": "STARTED"}}}
         result = await client.call_tool("unraid_start_array")
         mock.start_array.assert_awaited_once()
-        assert "startArray" in result.structured_content
+        assert result.structured_content["array"]["setState"]["state"] == "STARTED"
 
     async def test_ro_mode_hides_write_tool(self, client_ro):
         client, _ = client_ro
@@ -33,6 +35,6 @@ class TestUnraidStartArray:
 class TestUnraidStopArray:
     async def test_rw_mode_invokes_client(self, client_rw):
         client, mock = client_rw
-        mock.stop_array.return_value = {"stopArray": {"state": "STOPPED"}}
+        mock.stop_array.return_value = {"array": {"setState": {"state": "STOPPED"}}}
         await client.call_tool("unraid_stop_array")
         mock.stop_array.assert_awaited_once()

@@ -233,19 +233,41 @@ class TestGetFlash:
 
 class TestStartArray:
     @respx.mock
-    async def test_start_array_sends_mutation(self, client):
+    async def test_start_array_sends_grouped_mutation(self, client):
+        # Unraid API 4.32+ groups array lifecycle mutations under
+        # ``array.setState(input: {desiredState: START | STOP})``.
         route = respx.post(GRAPHQL_URL).mock(
-            return_value=httpx.Response(200, json={"data": {"startArray": {"state": "STARTED"}}})
+            return_value=httpx.Response(
+                200,
+                json={"data": {"array": {"setState": {"state": "STARTED"}}}},
+            )
         )
         result = await client.start_array()
-        assert result == {"startArray": {"state": "STARTED"}}
+        assert result == {"array": {"setState": {"state": "STARTED"}}}
         sent = json.loads(route.calls[0].request.content)
-        assert "startArray" in sent["query"]
+        assert "array" in sent["query"]
+        assert "setState" in sent["query"]
+        assert "desiredState: START" in sent["query"]
+
+
+class TestStopArray:
+    @respx.mock
+    async def test_stop_array_sends_grouped_mutation(self, client):
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={"data": {"array": {"setState": {"state": "STOPPED"}}}},
+            )
+        )
+        await client.stop_array()
+        sent = json.loads(route.calls[0].request.content)
+        assert "desiredState: STOP" in sent["query"]
 
 
 class TestStartContainer:
     @respx.mock
-    async def test_start_container_passes_id_variable(self, client):
+    async def test_start_container_passes_prefixed_id_variable(self, client):
+        # Drift #59: ``$id`` is typed as ``PrefixedID!`` on Unraid API 4.32+.
         route = respx.post(GRAPHQL_URL).mock(
             return_value=httpx.Response(
                 200,
@@ -255,26 +277,225 @@ class TestStartContainer:
         await client.start_container("abc")
         sent = json.loads(route.calls[0].request.content)
         assert sent["variables"] == {"id": "abc"}
+        assert "$id: PrefixedID!" in sent["query"]
+
+
+class TestRestartContainer:
+    @respx.mock
+    async def test_restart_container_emits_stop_then_start(self, client):
+        # Drift #59: ``docker.restart`` was removed; the client now
+        # reimplements restart as a client-side stop → start.
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={"data": {"docker": {"start": {"id": "abc", "state": "running", "status": "Up"}}}},
+            )
+        )
+        result = await client.restart_container("abc")
+        assert route.call_count == 2
+        first = json.loads(route.calls[0].request.content)
+        second = json.loads(route.calls[1].request.content)
+        assert "StopContainer" in first["query"]
+        assert "StartContainer" in second["query"]
+        assert first["variables"] == {"id": "abc"}
+        assert second["variables"] == {"id": "abc"}
+        assert set(result.keys()) == {"stop", "start"}
 
 
 class TestStartParityCheck:
     @respx.mock
-    async def test_start_parity_check_passes_correct_variable(self, client):
+    async def test_start_parity_check_sends_grouped_mutation(self, client):
+        # Unraid API 4.32+ groups parity mutations under
+        # ``parityCheck.{start,pause,resume,cancel}`` and returns JSON-ish
+        # (no typed selection set).
         route = respx.post(GRAPHQL_URL).mock(
-            return_value=httpx.Response(200, json={"data": {"startParityCheck": {"state": "RUNNING"}}})
+            return_value=httpx.Response(200, json={"data": {"parityCheck": {"start": True}}})
         )
         await client.start_parity_check(correct=True)
         sent = json.loads(route.calls[0].request.content)
         assert sent["variables"] == {"correct": True}
+        assert "parityCheck" in sent["query"]
+        assert "start(correct: $correct)" in sent["query"]
 
     @respx.mock
     async def test_start_parity_check_defaults_to_false(self, client):
         route = respx.post(GRAPHQL_URL).mock(
-            return_value=httpx.Response(200, json={"data": {"startParityCheck": {"state": "RUNNING"}}})
+            return_value=httpx.Response(200, json={"data": {"parityCheck": {"start": True}}})
         )
         await client.start_parity_check()
         sent = json.loads(route.calls[0].request.content)
         assert sent["variables"] == {"correct": False}
+
+
+class TestParityPauseResumeCancel:
+    @respx.mock
+    async def test_pause_parity_check_uses_grouped_field(self, client):
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(200, json={"data": {"parityCheck": {"pause": True}}})
+        )
+        await client.pause_parity_check()
+        sent = json.loads(route.calls[0].request.content)
+        assert "parityCheck { pause }" in sent["query"]
+
+    @respx.mock
+    async def test_resume_parity_check_uses_grouped_field(self, client):
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(200, json={"data": {"parityCheck": {"resume": True}}})
+        )
+        await client.resume_parity_check()
+        sent = json.loads(route.calls[0].request.content)
+        assert "parityCheck { resume }" in sent["query"]
+
+    @respx.mock
+    async def test_cancel_parity_check_uses_grouped_field(self, client):
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(200, json={"data": {"parityCheck": {"cancel": True}}})
+        )
+        await client.cancel_parity_check()
+        sent = json.loads(route.calls[0].request.content)
+        assert "parityCheck { cancel }" in sent["query"]
+
+
+class TestVmMutations:
+    @respx.mock
+    async def test_start_vm_normalises_boolean_payload(self, client):
+        # Drift #60: VM mutations return ``Boolean!`` on Unraid API 4.32+.
+        # The client flattens to ``{"ok": bool, "id": vm_id}``.
+        route = respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"vm": {"start": True}}}))
+        result = await client.start_vm("u1")
+        assert result == {"ok": True, "id": "u1"}
+        sent = json.loads(route.calls[0].request.content)
+        assert sent["variables"] == {"id": "u1"}
+        assert "$id: PrefixedID!" in sent["query"]
+        # No selection set on the boolean response.
+        assert "uuid" not in sent["query"]
+        assert "{ start(id: $id) }" in sent["query"]
+
+    @respx.mock
+    async def test_stop_vm_returns_false_when_server_says_false(self, client):
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"vm": {"stop": False}}}))
+        result = await client.stop_vm("u1")
+        assert result == {"ok": False, "id": "u1"}
+
+    @respx.mock
+    async def test_force_stop_vm_uses_force_stop_field_name(self, client):
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(200, json={"data": {"vm": {"forceStop": True}}})
+        )
+        result = await client.force_stop_vm("u1")
+        assert result == {"ok": True, "id": "u1"}
+        sent = json.loads(route.calls[0].request.content)
+        assert "forceStop(id: $id)" in sent["query"]
+
+
+class TestNotificationMutations:
+    @respx.mock
+    async def test_archive_notification_passes_prefixed_id(self, client):
+        # Drift #61: ``ID!`` became ``PrefixedID!``; the response selects
+        # ``NotificationOverview`` counters since the legacy ``id`` field
+        # was removed from the overview type.
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "archiveNotification": {
+                            "unread": {"total": 1, "info": 1, "warning": 0, "alert": 0},
+                            "archive": {"total": 5, "info": 3, "warning": 1, "alert": 1},
+                        },
+                    },
+                },
+            )
+        )
+        await client.archive_notification("n1")
+        sent = json.loads(route.calls[0].request.content)
+        assert sent["variables"] == {"id": "n1"}
+        assert "$id: PrefixedID!" in sent["query"]
+        assert "unread { total info warning alert }" in sent["query"]
+
+    @respx.mock
+    async def test_delete_notification_requires_type_argument(self, client):
+        # Drift #61: the live schema requires a ``type: NotificationType!``
+        # argument so it knows which counter to decrement.
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "deleteNotification": {
+                            "unread": {"total": 0, "info": 0, "warning": 0, "alert": 0},
+                            "archive": {"total": 0, "info": 0, "warning": 0, "alert": 0},
+                        },
+                    },
+                },
+            )
+        )
+        await client.delete_notification("n1")
+        sent = json.loads(route.calls[0].request.content)
+        assert sent["variables"] == {"id": "n1", "type": "UNREAD"}
+        assert "$id: PrefixedID!" in sent["query"]
+        assert "$type: NotificationType!" in sent["query"]
+
+    @respx.mock
+    async def test_delete_notification_forwards_archive_type(self, client):
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "deleteNotification": {
+                            "unread": {"total": 0, "info": 0, "warning": 0, "alert": 0},
+                            "archive": {"total": 0, "info": 0, "warning": 0, "alert": 0},
+                        },
+                    },
+                },
+            )
+        )
+        await client.delete_notification("n1", notification_type="ARCHIVE")
+        sent = json.loads(route.calls[0].request.content)
+        assert sent["variables"] == {"id": "n1", "type": "ARCHIVE"}
+
+    @respx.mock
+    async def test_archive_all_passes_null_importance_by_default(self, client):
+        # Drift #61: ``archiveAll`` accepts an optional
+        # ``importance: NotificationImportance`` filter. ``None`` is sent
+        # so the server archives every active entry.
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "archiveAll": {
+                            "unread": {"total": 0, "info": 0, "warning": 0, "alert": 0},
+                            "archive": {"total": 6, "info": 3, "warning": 2, "alert": 1},
+                        },
+                    },
+                },
+            )
+        )
+        await client.archive_all_notifications()
+        sent = json.loads(route.calls[0].request.content)
+        assert sent["variables"] == {"importance": None}
+        assert "$importance: NotificationImportance" in sent["query"]
+
+    @respx.mock
+    async def test_archive_all_forwards_importance_filter(self, client):
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "archiveAll": {
+                            "unread": {"total": 2, "info": 2, "warning": 0, "alert": 0},
+                            "archive": {"total": 4, "info": 1, "warning": 2, "alert": 1},
+                        },
+                    },
+                },
+            )
+        )
+        await client.archive_all_notifications(importance="WARNING")
+        sent = json.loads(route.calls[0].request.content)
+        assert sent["variables"] == {"importance": "WARNING"}
 
 
 class TestListUsers:
