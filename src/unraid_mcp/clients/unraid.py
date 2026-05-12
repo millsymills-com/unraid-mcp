@@ -1,4 +1,17 @@
-"""Unraid GraphQL client with typed query and mutation methods."""
+"""Unraid GraphQL client with typed query and mutation methods.
+
+Schema target: Unraid API v2.x. The field contract this client depends on
+is enumerated in :data:`SCHEMA_EXPECTATIONS` below, and verified at server
+startup by :meth:`UnraidClient.check_schema_compatibility` (introspection
+probe added in #68). Treat that dict as the source of truth — the per-query
+comments here are reviewer hints, not the contract.
+
+Drift incidents #51 and #53-#61 all shipped because the constants below
+had no in-source signal about which Unraid API version a query targeted.
+Before changing any ``QUERY_*`` or ``MUTATION_*`` body, update
+``SCHEMA_EXPECTATIONS`` in lockstep so ``--check-schema`` keeps catching
+mismatches at boot instead of at the first tool call.
+"""
 
 from __future__ import annotations
 
@@ -27,6 +40,9 @@ _VALIDATION_TIMEOUT_SECONDS = 5
 
 # ── Queries ─────────────────────────────────────────────────────────────
 
+# Info / OS / CPU / memory / baseboard / versions selection sets.
+# Drift history: #51 — InfoMemory and InfoVersions sub-selections didn't
+# match the live schema on some Unraid builds.
 QUERY_INFO = """
 query Info {
     info {
@@ -39,6 +55,7 @@ query Info {
 }
 """
 
+# Array state + capacity + parity/disk/cache rosters. Stable since 2024.
 QUERY_ARRAY = """
 query Array {
     array {
@@ -56,12 +73,16 @@ query Array {
 }
 """
 
+# Parity check history rows. Stable since 2024.
 QUERY_PARITY_HISTORY = """
 query ParityHistory {
     parityHistory { date duration speed status errors }
 }
 """
 
+# Physical disk roster + SMART status.
+# Drift history: #54 — Disk.temp was removed on newer builds; keep the
+# Disk field set aligned with SCHEMA_EXPECTATIONS["Disk"].
 QUERY_DISKS = """
 query Disks {
     disks {
@@ -70,6 +91,9 @@ query Disks {
 }
 """
 
+# Docker container roster + port mappings.
+# Drift history: #55 — root field Query.dockerContainers was missing on
+# some builds; #59 (sibling write mutations) renamed scalar ID types.
 QUERY_DOCKER_CONTAINERS = """
 query DockerContainers {
     dockerContainers {
@@ -81,12 +105,17 @@ query DockerContainers {
 }
 """
 
+# Docker network roster.
+# Drift history: #56 — root field Query.dockerNetworks was missing on
+# servers built without Docker support.
 QUERY_DOCKER_NETWORKS = """
 query DockerNetworks {
     dockerNetworks { id name driver scope created internal attachable ingress }
 }
 """
 
+# VM roster (single nested ``domain`` envelope). Stable since 2024 —
+# sibling VM write mutations (#60) changed shape but the read path didn't.
 QUERY_VMS = """
 query Vms {
     vms {
@@ -95,6 +124,7 @@ query Vms {
 }
 """
 
+# User-share roster + alloc/include/exclude metadata. Stable since 2024.
 QUERY_SHARES = """
 query Shares {
     shares {
@@ -104,12 +134,18 @@ query Shares {
 }
 """
 
+# Unraid user accounts. NEVER select ``password`` here — leak guard in
+# #107/#132. Drift history: #57 — root field Query.users was missing on
+# some builds.
 QUERY_USERS = """
 query Users {
     users { id name description roles }
 }
 """
 
+# Notification overviews.
+# Drift history: #58 — ``Notifications.type`` was removed; keep the
+# selection set aligned with SCHEMA_EXPECTATIONS["Notification"].
 QUERY_NOTIFICATIONS = """
 query Notifications {
     notifications {
@@ -118,14 +154,23 @@ query Notifications {
 }
 """
 
+# USB flash drive identity.
+# Drift history: #52 — ``Flash.guid`` is non-null on the schema but the
+# resolver returned null on trial/unregistered installs, causing a
+# GraphQL non-null violation rather than a Pydantic-friendly empty
+# result.
 QUERY_FLASH = """
 query Flash { flash { guid vendor product } }
 """
 
+# License registration state. Stable since 2024.
 QUERY_REGISTRATION = """
 query Registration { registration { state expiration type updateExpiration } }
 """
 
+# Unraid Connect remote-access settings.
+# Drift history: #53 — ``Connect.dynamicRemoteAccessType`` was renamed,
+# breaking the selection set on newer plugin versions.
 QUERY_CONNECT = """
 query Connect {
     connect {
@@ -138,104 +183,144 @@ query Connect {
 
 # ── Mutations ───────────────────────────────────────────────────────────
 
+# Array lifecycle mutations. Stable since 2024.
 MUTATION_START_ARRAY = """
 mutation StartArray { startArray { state } }
 """
 
+# Pairs with MUTATION_START_ARRAY. Stable since 2024.
 MUTATION_STOP_ARRAY = """
 mutation StopArray { stopArray { state } }
 """
 
+# Parity-check lifecycle mutations (start/pause/resume/cancel). Stable
+# since 2024 — all four return ``ArrayState`` and take no PrefixedID.
 MUTATION_START_PARITY_CHECK = """
 mutation StartParityCheck($correct: Boolean) {
     startParityCheck(correct: $correct) { state }
 }
 """
 
+# Parity pause. See MUTATION_START_PARITY_CHECK header.
 MUTATION_PAUSE_PARITY_CHECK = """
 mutation PauseParityCheck { pauseParityCheck { state } }
 """
 
+# Parity resume. See MUTATION_START_PARITY_CHECK header.
 MUTATION_RESUME_PARITY_CHECK = """
 mutation ResumeParityCheck { resumeParityCheck { state } }
 """
 
+# Parity cancel. See MUTATION_START_PARITY_CHECK header.
 MUTATION_CANCEL_PARITY_CHECK = """
 mutation CancelParityCheck { cancelParityCheck { state } }
 """
 
+# Docker container lifecycle (start/stop/restart/pause/unpause).
+# Drift history: #59 — these took ``PrefixedID!`` (not ``ID!``) on newer
+# builds and the ``docker.restart`` field was removed; keep the ID type
+# and the nested mutation field names aligned with the live schema.
 MUTATION_START_CONTAINER = """
 mutation StartContainer($id: ID!) {
     docker { start(id: $id) { id state status } }
 }
 """
 
+# Container stop. See MUTATION_START_CONTAINER header (#59).
 MUTATION_STOP_CONTAINER = """
 mutation StopContainer($id: ID!) {
     docker { stop(id: $id) { id state status } }
 }
 """
 
+# Container restart. See MUTATION_START_CONTAINER header (#59); the
+# ``docker.restart`` field was specifically called out as removed in
+# that drift report.
 MUTATION_RESTART_CONTAINER = """
 mutation RestartContainer($id: ID!) {
     docker { restart(id: $id) { id state status } }
 }
 """
 
+# Container pause. See MUTATION_START_CONTAINER header (#59).
 MUTATION_PAUSE_CONTAINER = """
 mutation PauseContainer($id: ID!) {
     docker { pause(id: $id) { id state status } }
 }
 """
 
+# Container unpause. See MUTATION_START_CONTAINER header (#59).
 MUTATION_UNPAUSE_CONTAINER = """
 mutation UnpauseContainer($id: ID!) {
     docker { unpause(id: $id) { id state status } }
 }
 """
 
+# VM lifecycle (start/stop/pause/resume/reboot/forceStop).
+# Drift history: #60 — all six now return ``Boolean!`` on newer builds,
+# making the ``{uuid name state}`` selection sets invalid. Re-verify the
+# return shape against the live schema before changing any of them.
 MUTATION_START_VM = """
 mutation StartVm($id: ID!) { vm { start(id: $id) { uuid name state } } }
 """
 
+# VM stop. See MUTATION_START_VM header (#60).
 MUTATION_STOP_VM = """
 mutation StopVm($id: ID!) { vm { stop(id: $id) { uuid name state } } }
 """
 
+# VM pause. See MUTATION_START_VM header (#60).
 MUTATION_PAUSE_VM = """
 mutation PauseVm($id: ID!) { vm { pause(id: $id) { uuid name state } } }
 """
 
+# VM resume. See MUTATION_START_VM header (#60).
 MUTATION_RESUME_VM = """
 mutation ResumeVm($id: ID!) { vm { resume(id: $id) { uuid name state } } }
 """
 
+# VM reboot. See MUTATION_START_VM header (#60).
 MUTATION_REBOOT_VM = """
 mutation RebootVm($id: ID!) { vm { reboot(id: $id) { uuid name state } } }
 """
 
+# VM forceStop. See MUTATION_START_VM header (#60).
 MUTATION_FORCE_STOP_VM = """
 mutation ForceStopVm($id: ID!) { vm { forceStop(id: $id) { uuid name state } } }
 """
 
+# Notification archive/delete mutations.
+# Drift history: #61 — ``ID!`` became ``PrefixedID!`` and
+# ``NotificationOverview.id`` was removed on newer builds. Update the
+# input type and the return selection in lockstep with the live schema.
 MUTATION_ARCHIVE_NOTIFICATION = """
 mutation ArchiveNotification($id: ID!) { archiveNotification(id: $id) { id } }
 """
 
+# Notification delete. See MUTATION_ARCHIVE_NOTIFICATION header (#61).
 MUTATION_DELETE_NOTIFICATION = """
 mutation DeleteNotification($id: ID!) { deleteNotification(id: $id) { id } }
 """
 
+# Bulk-archive of notifications. See MUTATION_ARCHIVE_NOTIFICATION
+# header (#61) — same NotificationOverview.id removal risk.
 MUTATION_ARCHIVE_ALL_NOTIFICATIONS = """
 mutation ArchiveAllNotifications { archiveAll { id } }
 """
 
+# Create/delete user mutations.
+# NEVER select ``password`` in the return shape — server has been seen
+# pushing the cleartext back; the leak guard in #107/#132 strips it from
+# the model but the query itself must not request it. ``Query.users``
+# itself was missing on some builds in #57, so the matching input
+# types may shift in lockstep on the same upgrade.
 MUTATION_CREATE_USER = """
 mutation CreateUser($input: addUserInput!) {
     addUser(input: $input) { id name description }
 }
 """
 
+# Delete user. See MUTATION_CREATE_USER header (#57, #107/#132).
 MUTATION_DELETE_USER = """
 mutation DeleteUser($input: deleteUserInput!) {
     deleteUser(input: $input) { id name }
