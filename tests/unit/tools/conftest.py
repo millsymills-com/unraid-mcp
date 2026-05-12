@@ -59,18 +59,3 @@ async def client_rw_no_key(monkeypatch):
     server = create_server()
     async with Client(server) as client:
         yield client
-
-
-@pytest_asyncio.fixture
-async def client_rw_user_mutations(monkeypatch, mock_unraid_client):
-    """Read-write mode with UNRAID_ALLOW_USER_MUTATIONS=true."""
-    monkeypatch.setenv("UNRAID_API_KEY", "test-key")
-    monkeypatch.setenv("UNRAID_MODE", "readwrite")
-    monkeypatch.setenv("UNRAID_ALLOW_USER_MUTATIONS", "true")
-    monkeypatch.setattr(
-        "unraid_mcp.clients.unraid.UnraidClient",
-        lambda *_a, **_kw: mock_unraid_client,
-    )
-    server = create_server()
-    async with Client(server) as client:
-        yield client, mock_unraid_client

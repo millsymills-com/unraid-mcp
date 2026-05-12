@@ -63,23 +63,6 @@ def require_readwrite(ctx: Context, action: str) -> UnraidClient:
     return require_client(ctx)
 
 
-def require_user_mutation(ctx: Context, action: str) -> UnraidClient:
-    """Return the client only in read-write mode with user mutations allowed.
-
-    Acts as defense-in-depth on top of the ``user-mutation`` tag gating in
-    ``create_server``: even if a misconfigured server forgot to disable the
-    tag, the runtime check here blocks the call.
-    """
-    config = _get_config(ctx)
-    if not config.is_readwrite:
-        raise UnraidReadOnlyError(f"Cannot {action} in read-only mode")
-    if not config.unraid_allow_user_mutations:
-        raise UnraidReadOnlyError(
-            f"Cannot {action}: user mutations are disabled (set UNRAID_ALLOW_USER_MUTATIONS=true to enable)",
-        )
-    return require_client(ctx)
-
-
 def unraid_tool(
     mcp: FastMCP,
     **tool_kwargs: Any,

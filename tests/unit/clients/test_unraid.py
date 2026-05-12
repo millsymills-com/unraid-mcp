@@ -498,25 +498,32 @@ class TestNotificationMutations:
         assert sent["variables"] == {"importance": "WARNING"}
 
 
-class TestListUsers:
+class TestGetMe:
     @respx.mock
-    async def test_list_users_returns_user_models(self, client):
-        users = [
-            {"id": "u1", "name": "root", "description": "admin", "roles": "admin"},
-            {"id": "u2", "name": "alice", "description": None, "roles": "user"},
-        ]
-        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"users": users}}))
-        result = await client.list_users()
-        assert [u.name for u in result] == ["root", "alice"]
+    async def test_get_me_returns_user_model(self, client):
+        me = {"id": "u1", "name": "root", "description": "admin", "roles": "admin"}
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"me": me}}))
+        result = await client.get_me()
+        assert result.name == "root"
+        assert result.roles == "admin"
 
     @respx.mock
-    async def test_list_users_query_does_not_request_password(self, client):
-        # Regression for #107: never select User.password — it returns the
-        # /etc/shadow hash and would land in MCP transcripts and logs.
+    async def test_get_me_raises_on_missing_top_level_field(self, client):
+        # Regression for #65: missing key is schema-drift, not "no user".
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {}}))
+        with pytest.raises(UnraidError, match="Missing 'me'"):
+            await client.get_me()
+
+    @respx.mock
+    async def test_get_me_query_does_not_request_password(self, client):
+        # Regression for #107: never select UserAccount.password — it returns
+        # the /etc/shadow hash and would land in MCP transcripts and logs.
         # Word-boundary regex so a future legitimate `passwordExpiry` field
         # would not falsely flag this assertion (#132).
-        route = respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"users": []}}))
-        await client.list_users()
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(200, json={"data": {"me": {"id": "u1", "name": "root"}}}),
+        )
+        await client.get_me()
         sent = json.loads(route.calls[0].request.content)
         assert not re.search(r"\bpassword\b", sent["query"])
 
@@ -537,53 +544,14 @@ class TestListUsers:
         assert instance.model_extra == {} or instance.model_extra is None
 
     @respx.mock
-    async def test_list_users_strips_server_pushed_password_end_to_end(self, client):
+    async def test_get_me_strips_server_pushed_password_end_to_end(self, client):
         # Regression for #132: simulate the Unraid API pushing `password`
         # unsolicited and assert it does not appear in the model_dump of
-        # the value `unraid_list_users` returns to FastMCP.
-        users = [
-            {"id": "u1", "name": "root", "roles": "admin", "password": "$6$shadow_hash"},
-        ]
-        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"users": users}}))
-        result = await client.list_users()
-        dumped = [u.model_dump() for u in result]
-        assert all("password" not in u for u in dumped)
-
-
-class TestCreateUser:
-    @respx.mock
-    async def test_create_user_with_description(self, client):
-        route = respx.post(GRAPHQL_URL).mock(
-            return_value=httpx.Response(
-                200,
-                json={"data": {"addUser": {"id": "u1", "name": "alice", "description": "Admin"}}},
-            )
-        )
-        await client.create_user(name="alice", password="hunter2", description="Admin")
-        sent = json.loads(route.calls[0].request.content)
-        assert sent["variables"]["input"]["name"] == "alice"
-        assert sent["variables"]["input"]["password"] == "hunter2"
-        assert sent["variables"]["input"]["description"] == "Admin"
-
-    @respx.mock
-    async def test_create_user_without_description_omits_field(self, client):
-        route = respx.post(GRAPHQL_URL).mock(
-            return_value=httpx.Response(200, json={"data": {"addUser": {"id": "u1", "name": "bob"}}})
-        )
-        await client.create_user(name="bob", password="hunter2")
-        sent = json.loads(route.calls[0].request.content)
-        assert "description" not in sent["variables"]["input"]
-
-
-class TestDeleteUser:
-    @respx.mock
-    async def test_delete_user_passes_name(self, client):
-        route = respx.post(GRAPHQL_URL).mock(
-            return_value=httpx.Response(200, json={"data": {"deleteUser": {"id": "u1", "name": "bob"}}})
-        )
-        await client.delete_user("bob")
-        sent = json.loads(route.calls[0].request.content)
-        assert sent["variables"]["input"] == {"name": "bob"}
+        # the value `unraid_get_me` returns to FastMCP.
+        me = {"id": "u1", "name": "root", "roles": "admin", "password": "$6$shadow_hash"}
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"me": me}}))
+        result = await client.get_me()
+        assert "password" not in result.model_dump()
 
 
 class TestValidateConnection:

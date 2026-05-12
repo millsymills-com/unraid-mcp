@@ -152,12 +152,13 @@ query Shares {
 }
 """
 
-# Unraid user accounts. NEVER select ``password`` here — leak guard in
-# #107/#132. Drift history: #57 — root field Query.users was missing on
-# some builds.
-QUERY_USERS = """
-query Users {
-    users { id name description roles }
+# Currently-authenticated Unraid user account. NEVER select ``password``
+# here — leak guard in #107/#132. Drift history: #57 — ``Query.users``,
+# ``addUser`` and ``deleteUser`` were removed in Unraid 7.2+; ``Query.me``
+# (returning a ``UserAccount``) is what replaces the list-and-mutate surface.
+QUERY_ME = """
+query Me {
+    me { id name description roles }
 }
 """
 
@@ -365,26 +366,6 @@ mutation ArchiveAllNotifications($importance: NotificationImportance) {
 }
 """
 
-# Create/delete user mutations.
-# NEVER select ``password`` in the return shape — server has been seen
-# pushing the cleartext back; the leak guard in #107/#132 strips it from
-# the model but the query itself must not request it. ``Query.users``
-# itself was missing on some builds in #57, so the matching input
-# types may shift in lockstep on the same upgrade.
-MUTATION_CREATE_USER = """
-mutation CreateUser($input: addUserInput!) {
-    addUser(input: $input) { id name description }
-}
-"""
-
-# Delete user. See MUTATION_CREATE_USER header (#57, #107/#132).
-MUTATION_DELETE_USER = """
-mutation DeleteUser($input: deleteUserInput!) {
-    deleteUser(input: $input) { id name }
-}
-"""
-
-
 # ── Schema compatibility check (#68) ────────────────────────────────────
 
 # Fields this client reads from the Unraid GraphQL schema. Checked at
@@ -406,7 +387,7 @@ SCHEMA_EXPECTATIONS: dict[str, frozenset[str]] = {
             "docker",
             "vms",
             "shares",
-            "users",
+            "me",
             "notifications",
             "flash",
             "registration",
@@ -422,8 +403,6 @@ SCHEMA_EXPECTATIONS: dict[str, frozenset[str]] = {
             "archiveNotification",
             "deleteNotification",
             "archiveAll",
-            "addUser",
-            "deleteUser",
             "docker",
             "vm",
         },
@@ -662,10 +641,15 @@ class UnraidClient(BaseGraphQLClient):
         result = await self.query(QUERY_SHARES)
         return [Share.model_validate(share) for share in _require_list(result, "shares")]
 
-    async def list_users(self) -> list[User]:
-        """List Unraid users."""
-        result = await self.query(QUERY_USERS)
-        return [User.model_validate(user) for user in _require_list(result, "users")]
+    async def get_me(self) -> User:
+        """Get the currently-authenticated Unraid user account.
+
+        Replaces the removed ``list_users`` on Unraid 7.2+, where
+        ``Query.users`` no longer exists. ``Query.me`` returns the
+        single ``UserAccount`` matching the API key in use.
+        """
+        result = await self.query(QUERY_ME)
+        return User.model_validate(_require_dict(result, "me"))
 
     async def list_notifications(
         self,
@@ -851,24 +835,6 @@ class UnraidClient(BaseGraphQLClient):
                 every active notification.
         """
         return await self.mutate(MUTATION_ARCHIVE_ALL_NOTIFICATIONS, variables={"importance": importance})
-
-    # ── Write methods: users ────────────────────────────────────────────
-
-    async def create_user(
-        self,
-        name: str,
-        password: str,
-        description: str | None = None,
-    ) -> dict[str, Any]:
-        """Create an Unraid user."""
-        input_arg: dict[str, Any] = {"name": name, "password": password}
-        if description is not None:
-            input_arg["description"] = description
-        return await self.mutate(MUTATION_CREATE_USER, variables={"input": input_arg})
-
-    async def delete_user(self, name: str) -> dict[str, Any]:
-        """Delete an Unraid user by name."""
-        return await self.mutate(MUTATION_DELETE_USER, variables={"input": {"name": name}})
 
     # ── Lifecycle ───────────────────────────────────────────────────────
 
