@@ -8,10 +8,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 - README subsection documenting the nightly `--check-schema` CI probe,
-  the three Actions secrets required to enable it on a fork
-  (`UNRAID_TEST_HOST`, `UNRAID_TEST_API_KEY`, `UNRAID_VERIFY_SSL`), and
-  how to disable the workflow if a fork doesn't operate a test server
-  (#153).
+  the Actions secrets required to enable it on a fork (`UNRAID_HOST`
+  and `UNRAID_API_KEY`, plus optional `UNRAID_PORT` /
+  `UNRAID_USE_HTTPS` / `UNRAID_VERIFY_SSL` overrides), and how to
+  disable the workflow if a fork doesn't operate a test server (#153).
 
 ### Changed
 - Centralised the per-tool error-handling boilerplate behind a new
