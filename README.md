@@ -48,6 +48,24 @@ Detected 2 schema-drift issue(s):
   • Mutation.array.startArray: argument `force` removed
 ```
 
+### Continuous schema drift check (CI)
+
+The [`.github/workflows/schema-probe.yml`](.github/workflows/schema-probe.yml) workflow runs `unraid-mcp --check-schema` nightly (`0 7 * * *` UTC) against a live Unraid server held in repository secrets. CI tracks against the latest Unraid stable release. Forks that want the probe to run must set two Actions secrets (with three optional overrides):
+
+```
+UNRAID_HOST            # required — hostname or IP of a reachable test server
+UNRAID_API_KEY         # required — API key on that server
+UNRAID_PORT            # optional — overrides the default port
+UNRAID_USE_HTTPS       # optional — "true" / "false"
+UNRAID_VERIFY_SSL      # optional — "true" / "false", leave default unless using a self-signed cert
+```
+
+The probe step is skipped automatically when the two required secrets are absent, so forks that don't have a test server see no failures. To opt out entirely, disable the workflow on your fork:
+
+```bash
+gh workflow disable "Schema Probe"
+```
+
 ## Operational notes
 
 - **Read-only by default.** `UNRAID_MODE` defaults to `readonly`; write tools (start/stop/restart, parity controls, user mutations) are hidden until you set `UNRAID_MODE=readwrite`. The mode is also re-checked at call time, so a forgotten env var can't quietly expose writes.

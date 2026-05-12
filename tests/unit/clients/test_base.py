@@ -14,6 +14,7 @@ from unraid_mcp.errors import (
     UnraidGraphQLError,
     UnraidNotFoundError,
     UnraidRateLimitError,
+    UnraidServerError,
     UnraidValidationError,
 )
 
@@ -269,6 +270,79 @@ class TestRetry:
         retry_lines = [r for r in caplog.records if r.levelname == "WARNING" and "Retrying" in r.message]
         assert retry_lines, f"expected a tenacity 'Retrying' WARNING line, got: {[r.message for r in caplog.records]}"
         assert "ConnectError" in retry_lines[0].message
+
+
+class TestRetryPolicySplit:
+    """Regression for #63 and #75: queries retry on timeouts and 5xx, mutations do not.
+
+    `TimeoutException` on a mutation means the server may already have
+    processed the request — retrying would duplicate side effects. 5xx
+    on a mutation has the same risk (a 502 can hit after the upstream
+    accepted the write). Queries are idempotent so both are safe to
+    retry there.
+    """
+
+    @respx.mock
+    async def test_query_retries_on_timeout(self, client):
+        route = respx.post(GRAPHQL_URL)
+        route.side_effect = [
+            httpx.ReadTimeout("Read timed out"),
+            httpx.Response(200, json={"data": {"ok": True}}),
+        ]
+        result = await client.query("query { ok }")
+        assert result == {"ok": True}
+        assert route.call_count == 2
+
+    @respx.mock
+    async def test_mutation_does_not_retry_on_timeout(self, client):
+        # The dangerous case: a ReadTimeout means the server may have
+        # processed the mutation. Retrying would duplicate it.
+        route = respx.post(GRAPHQL_URL).mock(side_effect=httpx.ReadTimeout("Read timed out"))
+        with pytest.raises(UnraidConnectionError):
+            await client.mutate("mutation { doThing }")
+        assert route.call_count == 1
+
+    @respx.mock
+    async def test_mutation_still_retries_on_connect_error(self, client):
+        # ConnectError is idempotent-safe (TCP handshake never completed),
+        # so even mutations may retry on it.
+        route = respx.post(GRAPHQL_URL)
+        route.side_effect = [
+            httpx.ConnectError("Connection refused"),
+            httpx.Response(200, json={"data": {"ok": True}}),
+        ]
+        result = await client.mutate("mutation { doThing }")
+        assert result == {"ok": True}
+        assert route.call_count == 2
+
+    @respx.mock
+    async def test_query_retries_on_5xx(self, client):
+        # Regression for #75: transient 5xx (gateway error, server
+        # restart) should retry on the query path.
+        route = respx.post(GRAPHQL_URL)
+        route.side_effect = [
+            httpx.Response(503, text="upstream down"),
+            httpx.Response(200, json={"data": {"ok": True}}),
+        ]
+        result = await client.query("query { ok }")
+        assert result == {"ok": True}
+        assert route.call_count == 2
+
+    @respx.mock
+    async def test_mutation_does_not_retry_on_5xx(self, client):
+        # A 502/503 on a write can mean the server already accepted the
+        # request and is now restarting. Don't retry.
+        route = respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(503, text="upstream down"))
+        with pytest.raises(UnraidServerError, match="HTTP 503"):
+            await client.mutate("mutation { doThing }")
+        assert route.call_count == 1
+
+    @respx.mock
+    async def test_5xx_raises_unraid_server_error(self, client):
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(502, text="bad gateway"))
+        with pytest.raises(UnraidServerError, match="HTTP 502") as excinfo:
+            await client.query("query { x }")
+        assert excinfo.value.status_code == 502
 
 
 class TestClose:

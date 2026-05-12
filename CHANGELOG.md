@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- README subsection documenting the nightly `--check-schema` CI probe,
+  the Actions secrets required to enable it on a fork (`UNRAID_HOST`
+  and `UNRAID_API_KEY`, plus optional `UNRAID_PORT` /
+  `UNRAID_USE_HTTPS` / `UNRAID_VERIFY_SSL` overrides), and how to
+  disable the workflow if a fork doesn't operate a test server (#153).
+
 ### Fixed
 - Aligned six read queries with the Unraid API 4.32+ schema, verified
   against a live Unraid 7.x / API 4.32 server. `SCHEMA_EXPECTATIONS` is
@@ -38,6 +45,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     opt-in) plus `limit` / `offset` pagination (#58).
 
 ### Changed
+- Schema-probe workflow (`.github/workflows/schema-probe.yml`) now
+  publishes drift output to `$GITHUB_STEP_SUMMARY` on failure and
+  auto-creates / updates a GitHub issue labelled `bug,schema-drift`
+  with the drift report. De-duplicates by reusing the oldest open
+  drift issue. Operators can opt out per run via the
+  `suppress_issue` workflow_dispatch input. The job still exits red
+  on drift so required-status-check semantics are preserved (#152).
+
+### Changed
+- Retry policy split by operation type in `BaseGraphQLClient._post`.
+  Queries retry on `ConnectError`, `TimeoutException`, and the new
+  `UnraidServerError` (HTTP 5xx). Mutations retry on `ConnectError`
+  only — `TimeoutException` and 5xx no longer duplicate writes whose
+  side effects may already have landed (e.g. `start_array`,
+  `start_parity_check`, `create_user`, every container/VM lifecycle
+  tool). Added `UnraidServerError(UnraidError)` for HTTP 5xx; mapped
+  to a clear "server returned 5xx; often transient" ToolError (#63,
+  #75).
 - Centralised the per-tool error-handling boilerplate behind a new
   `unraid_tool` decorator in `tools/_helpers.py`. Every tool in
   `tools/{system,array,parity,disks,docker,vms,shares,users,notifications}.py`
