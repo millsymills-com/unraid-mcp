@@ -8,6 +8,7 @@ import time
 from typing import Any
 
 import httpx
+from pydantic import SecretStr
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -74,18 +75,25 @@ class BaseGraphQLClient:
     def __init__(
         self,
         graphql_url: str,
-        api_key: str,
+        api_key: SecretStr | str,
         *,
         verify_ssl: bool = True,
         timeout: int = 30,
         max_retries: int = 3,
     ) -> None:
         self._graphql_url = graphql_url
-        self._api_key = api_key
+        # Wrap plain strings so the value can never escape via __repr__ /
+        # model_dump on whatever ends up holding a reference to the client.
+        self._api_key: SecretStr = api_key if isinstance(api_key, SecretStr) else SecretStr(api_key)
         self._max_retries = max_retries
+        if not verify_ssl:
+            logger.warning(
+                "SSL verification disabled — only safe on trusted networks. Set UNRAID_VERIFY_SSL=true to enable.",
+            )
+        key_value = self._api_key.get_secret_value()
         self._client = httpx.AsyncClient(
             headers={
-                "x-api-key": api_key,
+                "x-api-key": key_value,
                 "Content-Type": "application/json",
                 "Accept": "application/json",
             },
@@ -95,9 +103,12 @@ class BaseGraphQLClient:
         # Install the redaction filter on httpx / httpcore loggers so
         # DEBUG-level dumps don't leak the API key. Each client owns its
         # own filter instance so close() can remove exactly its own.
-        self._redact_filter = _ApiKeyRedactingFilter(api_key)
+        self._redact_filter = _ApiKeyRedactingFilter(key_value)
         for name in _REDACTED_LOGGER_NAMES:
             logging.getLogger(name).addFilter(self._redact_filter)
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(graphql_url={self._graphql_url!r}, api_key=<redacted>)"
 
     # ── HTTP / GraphQL helpers ──────────────────────────────────────────
 

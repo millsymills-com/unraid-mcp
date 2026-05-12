@@ -5,7 +5,7 @@ from __future__ import annotations
 import enum
 import logging
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ class UnraidConfig(BaseSettings):
     unraid_host: str = "tower.local"
     unraid_port: int = Field(default=443, ge=1, le=65535)
     unraid_use_https: bool = True
-    unraid_api_key: str | None = None
+    unraid_api_key: SecretStr | None = None
     unraid_verify_ssl: bool = True
 
     # General
@@ -68,7 +68,9 @@ class UnraidConfig(BaseSettings):
     @property
     def api_enabled(self) -> bool:
         """Whether the Unraid API is configured (host + non-empty key set)."""
-        return bool(self.unraid_api_key)
+        if self.unraid_api_key is None:
+            return False
+        return bool(self.unraid_api_key.get_secret_value())
 
     @property
     def base_url(self) -> str:

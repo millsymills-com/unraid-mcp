@@ -223,13 +223,14 @@ class TestApiKeyRedaction:
 
     async def test_key_is_redacted_in_httpx_logger_output(self, client, caplog):
         # Simulate an httpcore DEBUG log line that includes the request headers.
+        raw_key = client._api_key.get_secret_value()
         with caplog.at_level("DEBUG", logger="httpcore.http11"):
             logging.getLogger("httpcore.http11").debug(
                 "send_request_headers.started request=%s",
-                f"Request(headers={{'x-api-key': '{client._api_key}'}})",
+                f"Request(headers={{'x-api-key': '{raw_key}'}})",
             )
         messages = [r.getMessage() for r in caplog.records]
-        assert all(client._api_key not in m for m in messages), f"API key leaked in log: {messages}"
+        assert all(raw_key not in m for m in messages), f"API key leaked in log: {messages}"
         assert any("***REDACTED***" in m for m in messages)
 
     async def test_non_matching_log_lines_pass_through(self, client, caplog):  # noqa: ARG002 — fixture installs the filter
@@ -302,3 +303,44 @@ class TestObservability:
             await client.query("query InternalName { x }", operation_name="ExplicitName")
         assert any("graphql ExplicitName" in r.message for r in caplog.records)
         assert not any("graphql InternalName" in r.message for r in caplog.records)
+
+
+class TestRepr:
+    """`__repr__` must never contain the raw API key (#77)."""
+
+    async def test_repr_elides_api_key(self):
+        secret = "SUPER-SECRET-API-KEY-abc123xyz456"
+        client = BaseGraphQLClient(graphql_url=GRAPHQL_URL, api_key=secret)
+        try:
+            rendered = repr(client)
+            assert secret not in rendered
+            assert "<redacted>" in rendered
+            assert GRAPHQL_URL in rendered
+        finally:
+            await client.close()
+
+    async def test_repr_redacts_secretstr_input(self):
+        from pydantic import SecretStr
+
+        secret = "SUPER-SECRET-API-KEY-abc123xyz456"
+        client = BaseGraphQLClient(graphql_url=GRAPHQL_URL, api_key=SecretStr(secret))
+        try:
+            assert secret not in repr(client)
+        finally:
+            await client.close()
+
+
+class TestSslVerificationWarning:
+    """Emit a warning at construction time when SSL verification is disabled (#77)."""
+
+    async def test_warns_when_verify_ssl_false(self, caplog):
+        with caplog.at_level("WARNING", logger="unraid_mcp.clients.base"):
+            client = BaseGraphQLClient(graphql_url=GRAPHQL_URL, api_key="k", verify_ssl=False)
+            await client.close()
+        assert any("SSL verification disabled" in rec.message for rec in caplog.records)
+
+    async def test_no_warning_when_verify_ssl_true(self, caplog):
+        with caplog.at_level("WARNING", logger="unraid_mcp.clients.base"):
+            client = BaseGraphQLClient(graphql_url=GRAPHQL_URL, api_key="k", verify_ssl=True)
+            await client.close()
+        assert not any("SSL verification disabled" in rec.message for rec in caplog.records)
