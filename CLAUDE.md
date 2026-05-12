@@ -34,6 +34,9 @@ uv run pre-commit run --all-files
 
 # Build package
 uv build
+
+# Pre-flight schema compatibility against a live Unraid server
+uv run unraid-mcp --check-schema
 ```
 
 ## Architecture
