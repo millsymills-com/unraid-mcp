@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -17,14 +16,6 @@ from unraid_mcp.config import UnraidConfig
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class ServerContext:
-    """Lifespan context passed to all tools via ``ctx.lifespan_context``."""
-
-    config: UnraidConfig
-    client: object | None = None  # UnraidClient | None — typed loosely to avoid circular imports
-
-
 def make_server_lifespan(config: UnraidConfig) -> Lifespan:
     """Build a FastMCP lifespan bound to the given ``UnraidConfig``.
 
@@ -33,11 +24,15 @@ def make_server_lifespan(config: UnraidConfig) -> Lifespan:
     Unraid client. This keeps tests and embedded callers from silently
     picking up environment-sourced values when they passed an explicit
     config.
+
+    Yields a plain ``dict[str, Any]`` to match FastMCP's documented
+    ``LifespanFn`` contract (see #67). Composed lifespans merge results via
+    ``{**left, **right}``, which would ``TypeError`` on a dataclass.
     """
 
-    @lifespan  # ty: ignore[invalid-argument-type]
-    async def _server_lifespan(_server: FastMCP) -> AsyncIterator[ServerContext]:  # noqa: PLR0912 — startup flow
-        context = ServerContext(config=config)
+    @lifespan
+    async def _server_lifespan(_server: FastMCP) -> AsyncIterator[dict[str, Any]]:  # noqa: PLR0912 — startup flow
+        context: dict[str, Any] = {"config": config, "client": None}
 
         # Lazily import the client to avoid circular deps at module load time
         from unraid_mcp.clients.unraid import UnraidClient
@@ -67,7 +62,7 @@ def make_server_lifespan(config: UnraidConfig) -> Lifespan:
                 )
                 await client.close()
             else:
-                context.client = client
+                context["client"] = client
                 logger.info("Unraid client initialized and validated")
                 # Schema-compatibility probe (#68) — warns on drift but does
                 # not fail startup. A failed introspection call itself is
@@ -100,9 +95,10 @@ def make_server_lifespan(config: UnraidConfig) -> Lifespan:
         try:
             yield context
         finally:
-            if context.client is not None:
+            client = context.get("client")
+            if client is not None:
                 try:
-                    await context.client.close()  # ty: ignore[unresolved-attribute]
+                    await client.close()
                     logger.info("Closed Unraid client")
                 except Exception:
                     logger.exception("Error closing Unraid client")
