@@ -60,3 +60,6 @@ Thumbs.db
 # Claude Code workspace settings (may include local hostnames / API keys
 # pasted into Bash() permission allowlists)
 .claude/
+
+# Parallel worktrees for AFK agent work
+.worktrees/
