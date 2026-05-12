@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- README subsection documenting the nightly `--check-schema` CI probe,
+  the three Actions secrets required to enable it on a fork
+  (`UNRAID_TEST_HOST`, `UNRAID_TEST_API_KEY`, `UNRAID_VERIFY_SSL`), and
+  how to disable the workflow if a fork doesn't operate a test server
+  (#153).
+
 ### Changed
 - Centralised the per-tool error-handling boilerplate behind a new
   `unraid_tool` decorator in `tools/_helpers.py`. Every tool in
