@@ -7,14 +7,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
-- `UnraidClient` read methods now raise `UnraidError` when an expected
-  top-level field is missing from a GraphQL response. The previous
-  `result.get(key, default)` pattern silently turned schema drift (a
-  renamed or nested root field) into "no items" — operators saw empty
-  containers, no VMs, etc., with no signal. Null values are still
-  normalized to `{}` / `[]` per the GraphQL spec; only missing keys (and
-  wrong-typed values) raise. `# type: ignore[no-any-return]` dropped on
-  `get_flash` / `get_registration` / `get_connect` (#65).
+- Centralised the per-tool error-handling boilerplate behind a new
+  `unraid_tool` decorator in `tools/_helpers.py`. Every tool in
+  `tools/{system,array,parity,disks,docker,vms,shares,users,notifications}.py`
+  drops its `try: ... except Exception as e: handle_client_error(e)`
+  wrapper and registers via `@unraid_tool(mcp, ...)`. The decorator
+  **narrows the catch to `UnraidError`** so programming bugs
+  (`KeyError`, `AttributeError`, `TypeError`) propagate to FastMCP with
+  a full stacktrace instead of being disguised as "Unexpected error:
+  ..." strings sent to the model. Existing `tags={"write"}` /
+  `annotations={"readOnlyHint": False}` semantics are preserved by
+  forwarding `**tool_kwargs` to `mcp.tool(...)` (#74).
 
 ### Removed
 - PyPI release pipeline (`.github/workflows/release.yml`) and the
