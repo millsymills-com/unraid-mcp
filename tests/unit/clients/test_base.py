@@ -170,6 +170,51 @@ class TestErrorMapping:
             await client.query("query { x }")
 
 
+class TestErrorBodyTruncation:
+    """HTTP / JSON error bodies must keep enough context to identify the failure (#80)."""
+
+    @respx.mock
+    async def test_error_body_under_limit_is_not_truncated(self, client):
+        body = '{"errors":[{"message":"Cannot query field \\"dockerContainers\\" on type \\"Query\\"."}]}'
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(400, text=body))
+        with pytest.raises(UnraidError) as exc_info:
+            await client.query("query { x }")
+        assert "dockerContainers" in str(exc_info.value)
+        assert "truncated" not in str(exc_info.value)
+
+    @respx.mock
+    async def test_error_body_over_limit_is_truncated_with_marker(self, client, caplog):
+        long_body = "x" * 5000
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(500, text=long_body))
+        with (
+            caplog.at_level("DEBUG", logger="unraid_mcp.clients.base"),
+            pytest.raises(UnraidError) as exc_info,
+        ):
+            await client.query("query { x }")
+        message = str(exc_info.value)
+        assert "[truncated, 5000 bytes total" in message
+        assert len(message) < 5000
+        debug_lines = [r for r in caplog.records if r.levelname == "DEBUG" and "full error body" in r.message]
+        assert debug_lines, "expected a DEBUG line with the full body"
+        assert long_body in debug_lines[0].message
+
+    @respx.mock
+    async def test_invalid_json_truncates_and_logs_full_body(self, client, caplog):
+        long_body = "not json " * 500
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(200, content=long_body.encode(), headers={"content-type": "application/json"})
+        )
+        with (
+            caplog.at_level("DEBUG", logger="unraid_mcp.clients.base"),
+            pytest.raises(UnraidError, match="Invalid JSON") as exc_info,
+        ):
+            await client.query("query { x }")
+        message = str(exc_info.value)
+        assert "[truncated" in message
+        debug_lines = [r for r in caplog.records if r.levelname == "DEBUG" and "Invalid JSON full body" in r.message]
+        assert debug_lines, "expected a DEBUG line with the full invalid-JSON body"
+
+
 class TestMalformedJson:
     @respx.mock
     async def test_invalid_json_raises_unraid_error(self, client):

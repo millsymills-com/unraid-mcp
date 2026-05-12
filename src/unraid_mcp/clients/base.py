@@ -114,12 +114,26 @@ class BaseGraphQLClient:
 
     # ── HTTP / GraphQL helpers ──────────────────────────────────────────
 
+    # Truncate raw HTTP error bodies in exception messages so a multi-KB
+    # validation error doesn't dominate logs while still leaving room for
+    # GraphQL error payloads (which routinely exceed the previous 200-byte
+    # cap, hiding the failing field name in the truncated tail).
+    _ERROR_BODY_LIMIT = 2000
+
+    def _truncate_body(self, body: str) -> str:
+        if len(body) <= self._ERROR_BODY_LIMIT:
+            return body
+        return f"{body[: self._ERROR_BODY_LIMIT]}… [truncated, {len(body)} bytes total; see DEBUG log for full body]"
+
     def _raise_for_status(self, response: httpx.Response) -> None:
         """Map HTTP status codes to typed exceptions."""
         if response.is_success:
             return
         status = response.status_code
-        body = response.text[:200]
+        full_body = response.text
+        if len(full_body) > self._ERROR_BODY_LIMIT:
+            logger.debug("HTTP %d full error body: %s", status, full_body)
+        body = self._truncate_body(full_body)
         if status in (401, 403):
             raise UnraidAuthError(f"HTTP {status}: {body}", status_code=status)
         if status == 404:
@@ -133,7 +147,10 @@ class BaseGraphQLClient:
         try:
             payload = response.json()
         except ValueError as exc:
-            body = response.text[:200]
+            full_body = response.text
+            if len(full_body) > self._ERROR_BODY_LIMIT:
+                logger.debug("Invalid JSON full body (HTTP %d): %s", response.status_code, full_body)
+            body = self._truncate_body(full_body)
             raise UnraidError(
                 f"Invalid JSON in response (HTTP {response.status_code}): {body}",
                 status_code=None,
