@@ -6,6 +6,37 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- Aligned six read queries with the Unraid API 4.32+ schema, verified
+  against a live Unraid 7.x / API 4.32 server. `SCHEMA_EXPECTATIONS` is
+  updated in lockstep so `unraid-mcp --check-schema` and the boot-time
+  drift probe keep reporting accurately.
+  - `unraid_get_info`: `info.memory` switches from aggregated totals to
+    per-DIMM `layout` entries; `info.versions` splits into nested
+    `core { unraid kernel api }` and `packages { openssl docker node npm
+    nginx php git pm2 }` objects. `CpuInfo.stepping` accepts `int | str`
+    since the live schema types it as `Int` (#51).
+  - `unraid_get_connect`: `Connect.dynamicRemoteAccessType` became a
+    nested `dynamicRemoteAccess { enabledType runningType error }`
+    object, and the legacy `config { accessType forwardType port }`
+    fields moved to the sibling top-level `remoteAccess` query. Both
+    are fetched together and merged into one combined return shape
+    (#53).
+  - `unraid_list_disks` / `unraid_get_disk`: `Disk.temp` →
+    `temperature`, `Disk.interface` → `interfaceType`, `rotational`
+    removed (closest live equivalent is the inverse of `isSpinning`),
+    `vendor` and `isSpinning` added (#54).
+  - `unraid_list_containers` / `unraid_get_container`: top-level
+    `Query.dockerContainers` removed in favor of `docker.containers`;
+    `DockerContainer.networkMode` removed (#55).
+  - `unraid_list_docker_networks`: same regrouping as #55 —
+    `Query.dockerNetworks` → `docker.networks`. `enableIPv6` added
+    (#56).
+  - `unraid_list_notifications`: `Notifications.list(filter:
+    NotificationFilter)` — `type` is required, so the tool takes a
+    `notification_type` parameter (`UNREAD` default, `ARCHIVE`
+    opt-in) plus `limit` / `offset` pagination (#58).
+
 ### Changed
 - Centralised the per-tool error-handling boilerplate behind a new
   `unraid_tool` decorator in `tools/_helpers.py`. Every tool in
