@@ -40,6 +40,14 @@ Generate an API key in the Unraid WebGUI under **Settings → Management Access 
 
 Once configured, run `unraid-mcp --check-config` to verify connectivity before attaching an MCP client — it prints the resolved config (with the API key redacted), runs a single validation query, and exits 0 / 1 / 2 (ok / no key / validation failed).
 
+Before re-deploying against a new Unraid release, run `unraid-mcp --check-schema` to pre-flight upgrade compatibility — it introspects the live GraphQL schema and reports any drift from what this client expects to query. Exit codes are `0` (schema compatible), `1` (no API key configured), and `2` (drift detected or connection failure). Sample drift output:
+
+```
+Detected 2 schema-drift issue(s):
+  • Query.docker.containers: missing field `autoStart`
+  • Mutation.array.startArray: argument `force` removed
+```
+
 ## MCP client setup
 
 `unraid-mcp` speaks MCP over stdio. Point any compatible client at the installed console script and pass your Unraid settings through the `env` block.
@@ -168,6 +176,15 @@ docker run -i --rm \
     -e UNRAID_HOST=tower.local \
     -e UNRAID_API_KEY=your-key \
     unraid-mcp:latest --check-config
+```
+
+Pre-flight schema compatibility against the built image:
+
+```bash
+docker run -i --rm \
+    -e UNRAID_HOST=tower.local \
+    -e UNRAID_API_KEY=your-key \
+    unraid-mcp:latest --check-schema
 ```
 
 ## Configuration
