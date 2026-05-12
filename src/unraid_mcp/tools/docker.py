@@ -6,7 +6,6 @@ from typing import Any
 
 from fastmcp import Context, FastMCP
 
-from unraid_mcp.errors import UnraidNotFoundError
 from unraid_mcp.models.docker import DockerContainer, DockerNetwork
 from unraid_mcp.tools._helpers import require_client, require_readwrite, unraid_tool
 
@@ -41,15 +40,7 @@ def register_docker_tools(mcp: FastMCP) -> None:
             ``DockerContainer`` model for the matching container.
         """
         client = require_client(ctx)
-        containers = await client.list_containers()
-        target = container_id.lstrip("/")
-        for container in containers:
-            if container.id == container_id:
-                return container
-            names = container.names or []
-            if any(name.lstrip("/") == target for name in names):
-                return container
-        raise UnraidNotFoundError(f"Container '{container_id}' not found")
+        return await client.get_container(container_id)
 
     @unraid_tool(mcp, tags={"docker"})
     async def unraid_list_docker_networks(ctx: Context) -> list[DockerNetwork]:
@@ -96,14 +87,27 @@ def register_docker_tools(mcp: FastMCP) -> None:
 
     @unraid_tool(mcp, tags={"write", "docker"}, annotations={"readOnlyHint": False, "destructiveHint": False})
     async def unraid_restart_container(ctx: Context, container_id: str) -> dict[str, Any]:
-        """Restart a Docker container by ID.
+        """Restart a Docker container by stopping then starting it.
+
+        ``docker.restart`` was removed from the Unraid API 4.32+ schema,
+        so this tool composes the restart client-side as a stop → start
+        sequence and returns both underlying mutation responses.
+
+        **Partial-failure semantics:** if the stop succeeds but the
+        subsequent start fails, the container is left stopped and the
+        tool raises an error noting that the stop already completed —
+        the operator should call ``unraid_start_container`` to roll
+        forward. If the stop itself fails there is no partial state to
+        report and the underlying error propagates unchanged.
 
         Args:
             ctx: FastMCP request context.
             container_id: Container ID.
 
         Returns:
-            Raw GraphQL mutation response payload.
+            ``{"stop": <stop response>, "start": <start response>}`` on
+            success, where each value is the raw GraphQL mutation
+            response payload for that step.
         """
         client = require_readwrite(ctx, "restart container")
         return await client.restart_container(container_id)

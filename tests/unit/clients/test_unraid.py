@@ -10,7 +10,7 @@ import pytest
 import respx
 
 from unraid_mcp.clients.unraid import UnraidClient
-from unraid_mcp.errors import UnraidConnectionError, UnraidError
+from unraid_mcp.errors import UnraidConnectionError, UnraidError, UnraidNotFoundError
 from unraid_mcp.models.users import User
 
 GRAPHQL_URL = "https://tower.local:443/graphql"
@@ -300,6 +300,62 @@ class TestRestartContainer:
         assert first["variables"] == {"id": "abc"}
         assert second["variables"] == {"id": "abc"}
         assert set(result.keys()) == {"stop", "start"}
+
+    @respx.mock
+    async def test_restart_container_returns_merged_stop_and_start_payloads(self, client):
+        # Issue #164: success path must surface both underlying mutation
+        # responses under their respective keys so callers can inspect
+        # the GraphQL data from each step.
+        stop_payload = {"docker": {"stop": {"id": "abc", "state": "exited", "status": "Exited"}}}
+        start_payload = {"docker": {"start": {"id": "abc", "state": "running", "status": "Up"}}}
+        responses = [
+            httpx.Response(200, json={"data": stop_payload}),
+            httpx.Response(200, json={"data": start_payload}),
+        ]
+        respx.post(GRAPHQL_URL).mock(side_effect=responses)
+        result = await client.restart_container("abc")
+        assert result == {"stop": stop_payload, "start": start_payload}
+
+    @respx.mock
+    async def test_restart_container_raises_with_partial_failure_message_when_start_fails(self, client):
+        # Issue #164: if stop succeeds but start fails, the container is
+        # left stopped — the raised UnraidError must say so and chain
+        # the original via __cause__ so operators can trace the
+        # underlying GraphQL failure.
+        stop_payload = {"docker": {"stop": {"id": "abc", "state": "exited", "status": "Exited"}}}
+        responses = [
+            httpx.Response(200, json={"data": stop_payload}),
+            httpx.Response(
+                200,
+                json={"errors": [{"message": "docker daemon refused start"}]},
+            ),
+        ]
+        route = respx.post(GRAPHQL_URL).mock(side_effect=responses)
+        with pytest.raises(UnraidError, match="was stopped successfully") as exc_info:
+            await client.restart_container("abc")
+        assert route.call_count == 2
+        assert "unraid_start_container" in str(exc_info.value)
+        assert "'abc'" in str(exc_info.value)
+        # Original GraphQL failure must be chained for diagnostics.
+        assert isinstance(exc_info.value.__cause__, UnraidError)
+
+    @respx.mock
+    async def test_restart_container_propagates_stop_failure_unchanged(self, client):
+        # Issue #164: when the stop itself fails there is no partial
+        # state to report — the underlying exception must propagate
+        # unchanged (no rewrap, no "was stopped successfully" message),
+        # and the start mutation must never be issued.
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={"errors": [{"message": "docker daemon refused stop"}]},
+            ),
+        )
+        with pytest.raises(UnraidError) as exc_info:
+            await client.restart_container("abc")
+        assert route.call_count == 1
+        assert "was stopped successfully" not in str(exc_info.value)
+        assert "docker daemon refused stop" in str(exc_info.value)
 
 
 class TestStartParityCheck:
@@ -635,3 +691,163 @@ class TestValidateConnection:
         with pytest.raises(UnraidConnectionError):
             await client.validate_connection()
         assert route.call_count == 1
+
+
+# Validation-failure response shape — matches what the live Unraid server
+# emits when a query references a non-existent field. The error code is
+# what `_check_graphql_errors` keys on to raise `UnraidValidationError`,
+# which the singular-query client methods catch to drive the list-fallback.
+_VALIDATION_ERROR_BODY = {
+    "errors": [
+        {
+            "message": "Cannot query field on type",
+            "extensions": {"code": "GRAPHQL_VALIDATION_FAILED"},
+        },
+    ],
+}
+
+
+class TestGetDisk:
+    @respx.mock
+    async def test_singular_query_happy_path(self, client):
+        # Unraid API 4.32+ exposes ``Query.disk(id: PrefixedID!)`` — one
+        # round trip, no list scan.
+        disk = {"id": "d1", "name": "disk1", "smartStatus": "PASS"}
+        route = respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"disk": disk}}))
+        result = await client.get_disk("d1")
+        assert result.id == "d1"
+        assert result.name == "disk1"
+        assert route.call_count == 1
+        sent = json.loads(route.calls[0].request.content)
+        assert sent["variables"] == {"id": "d1"}
+        assert "$id: PrefixedID!" in sent["query"]
+        assert "disk(id: $id)" in sent["query"]
+
+    @respx.mock
+    async def test_falls_back_to_list_on_validation_error(self, client):
+        # Older schemas without ``Query.disk`` raise
+        # ``GRAPHQL_VALIDATION_FAILED``; the client retries via the list
+        # query so the singular helper still works on old servers.
+        disks = [{"id": "d1", "name": "disk1"}, {"id": "d2", "name": "disk2"}]
+        responses = iter(
+            [
+                httpx.Response(200, json={"data": None, **_VALIDATION_ERROR_BODY}),
+                httpx.Response(200, json={"data": {"disks": disks}}),
+            ],
+        )
+        route = respx.post(GRAPHQL_URL).mock(side_effect=lambda _request: next(responses))
+        result = await client.get_disk("d2")
+        assert result.id == "d2"
+        assert route.call_count == 2
+
+    @respx.mock
+    async def test_falls_back_to_list_when_singular_returns_null(self, client):
+        # ``Query.disk`` is nullable on the schema — a present-but-null
+        # response means the server has no disk matching the id. Fall back
+        # to the list path so callers can still pass ``Disk.name`` as the
+        # identifier (the legacy lookup matched on both).
+        disks = [{"id": "d1", "name": "disk1"}]
+        responses = iter(
+            [
+                httpx.Response(200, json={"data": {"disk": None}}),
+                httpx.Response(200, json={"data": {"disks": disks}}),
+            ],
+        )
+        respx.post(GRAPHQL_URL).mock(side_effect=lambda _request: next(responses))
+        result = await client.get_disk("disk1")
+        assert result.id == "d1"
+
+    @respx.mock
+    async def test_not_found_raises_unraid_not_found(self, client):
+        # Singular path returns null and the list does not contain the
+        # requested id — both legs miss, so `UnraidNotFoundError` propagates.
+        responses = iter(
+            [
+                httpx.Response(200, json={"data": {"disk": None}}),
+                httpx.Response(200, json={"data": {"disks": [{"id": "d1", "name": "disk1"}]}}),
+            ],
+        )
+        respx.post(GRAPHQL_URL).mock(side_effect=lambda _request: next(responses))
+        with pytest.raises(UnraidNotFoundError, match="Disk with id 'nope' not found"):
+            await client.get_disk("nope")
+
+
+class TestGetContainer:
+    @respx.mock
+    async def test_singular_query_happy_path(self, client):
+        # Unraid API 4.32+ exposes ``Docker.container(id: PrefixedID!)``
+        # under the grouped ``docker`` root — one round trip.
+        container = {"id": "abc", "names": ["/plex"], "state": "running"}
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(200, json={"data": {"docker": {"container": container}}}),
+        )
+        result = await client.get_container("abc")
+        assert result.id == "abc"
+        assert result.names == ["/plex"]
+        assert route.call_count == 1
+        sent = json.loads(route.calls[0].request.content)
+        assert sent["variables"] == {"id": "abc"}
+        assert "$id: PrefixedID!" in sent["query"]
+        assert "container(id: $id)" in sent["query"]
+
+    @respx.mock
+    async def test_falls_back_to_list_on_validation_error(self, client):
+        containers = [{"id": "abc", "names": ["/plex"]}, {"id": "def", "names": ["/sonarr"]}]
+        responses = iter(
+            [
+                httpx.Response(200, json={"data": None, **_VALIDATION_ERROR_BODY}),
+                httpx.Response(200, json={"data": {"docker": {"containers": containers}}}),
+            ],
+        )
+        route = respx.post(GRAPHQL_URL).mock(side_effect=lambda _request: next(responses))
+        result = await client.get_container("def")
+        assert result.id == "def"
+        assert route.call_count == 2
+
+    @respx.mock
+    async def test_falls_back_to_list_when_singular_returns_null(self, client):
+        # ``Docker.container`` returns null when the daemon has no container
+        # by that id; the fallback also matches by name so callers can pass
+        # either identifier.
+        containers = [{"id": "abc", "names": ["/plex"]}]
+        responses = iter(
+            [
+                httpx.Response(200, json={"data": {"docker": {"container": None}}}),
+                httpx.Response(200, json={"data": {"docker": {"containers": containers}}}),
+            ],
+        )
+        respx.post(GRAPHQL_URL).mock(side_effect=lambda _request: next(responses))
+        result = await client.get_container("plex")
+        assert result.id == "abc"
+
+    @respx.mock
+    async def test_not_found_raises_unraid_not_found(self, client):
+        responses = iter(
+            [
+                httpx.Response(200, json={"data": {"docker": {"container": None}}}),
+                httpx.Response(200, json={"data": {"docker": {"containers": [{"id": "abc", "names": ["/plex"]}]}}}),
+            ],
+        )
+        respx.post(GRAPHQL_URL).mock(side_effect=lambda _request: next(responses))
+        with pytest.raises(UnraidNotFoundError, match="Container 'nope' not found"):
+            await client.get_container("nope")
+
+
+class TestGetShare:
+    @respx.mock
+    async def test_lookup_by_name_returns_share(self, client):
+        # No singular share query exists on the Unraid schema — the client
+        # always lists and filters, but encapsulates the scan so the tool
+        # layer keeps a single call site.
+        shares = [{"name": "media"}, {"name": "backups"}]
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"shares": shares}}))
+        result = await client.get_share("backups")
+        assert result.name == "backups"
+
+    @respx.mock
+    async def test_miss_raises_unraid_not_found(self, client):
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(200, json={"data": {"shares": [{"name": "media"}]}}),
+        )
+        with pytest.raises(UnraidNotFoundError, match="Share 'nope' not found"):
+            await client.get_share("nope")
