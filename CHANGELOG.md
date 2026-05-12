@@ -14,6 +14,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   disable the workflow if a fork doesn't operate a test server (#153).
 
 ### Fixed
+<<<<<<< HEAD
 - Aligned the Docker, VM, notification, array, and parity write
   mutations with the Unraid API 4.32+ schema. `SCHEMA_EXPECTATIONS`
   is updated in lockstep so `unraid-mcp --check-schema` keeps catching
@@ -50,6 +51,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     Return selections track the updated `NotificationOverview`
     (`unread { total info warning alert } archive { ... }`) instead
     of the removed `id` field (#61).
+- Schema-probe workflow (`.github/workflows/schema-probe.yml`) now
+  selects the oldest open `schema-drift` issue for dedup by adding
+  `--search "sort:created-asc"` to the `gh issue list` call.
+  `gh issue list` defaults to `sort:created-desc`, so the previous
+  query returned the newest issue, contradicting the documented intent
+  of reusing the issue with accumulated history (#159).
+- Reverted `Disk.size` from `int | None` back to `str | None` to match
+  `ArrayDisk.size` and `Share.size`. Unraid byte scalars serialize as
+  JSON strings and non-numeric values (`"4 TB"`, `"-"`) would have
+  failed validation under the `int` typing introduced in #154 (#158).
 - Aligned six read queries with the Unraid API 4.32+ schema, verified
   against a live Unraid 7.x / API 4.32 server. `SCHEMA_EXPECTATIONS` is
   updated in lockstep so `unraid-mcp --check-schema` and the boot-time
