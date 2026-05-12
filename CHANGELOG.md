@@ -14,6 +14,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   disable the workflow if a fork doesn't operate a test server (#153).
 
 ### Fixed
+- Schema-probe workflow (`.github/workflows/schema-probe.yml`) now
+  selects the oldest open `schema-drift` issue for dedup by adding
+  `--search "sort:created-asc"` to the `gh issue list` call.
+  `gh issue list` defaults to `sort:created-desc`, so the previous
+  query returned the newest issue, contradicting the documented intent
+  of reusing the issue with accumulated history (#159).
 - Aligned six read queries with the Unraid API 4.32+ schema, verified
   against a live Unraid 7.x / API 4.32 server. `SCHEMA_EXPECTATIONS` is
   updated in lockstep so `unraid-mcp --check-schema` and the boot-time
