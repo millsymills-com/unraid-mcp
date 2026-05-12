@@ -15,7 +15,12 @@ class ContainerPort(UnraidBaseModel):
 
 
 class DockerContainer(UnraidBaseModel):
-    """A Docker container."""
+    """A Docker container.
+
+    ``network_mode`` was removed from the Unraid API 4.32+ schema; use
+    the ``networkSettings`` JSON blob (passed through via
+    ``extra="allow"``) if that data is still needed.
+    """
 
     id: str | None = None
     names: list[str] | None = None
@@ -27,7 +32,6 @@ class DockerContainer(UnraidBaseModel):
     status: str | None = None
     ports: list[ContainerPort] | None = None
     auto_start: bool | None = None
-    network_mode: str | None = None
 
 
 class DockerNetwork(UnraidBaseModel):
@@ -41,3 +45,4 @@ class DockerNetwork(UnraidBaseModel):
     internal: bool | None = None
     attachable: bool | None = None
     ingress: bool | None = None
+    enable_ipv6: bool | None = None

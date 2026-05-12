@@ -41,16 +41,26 @@ _VALIDATION_TIMEOUT_SECONDS = 5
 # ── Queries ─────────────────────────────────────────────────────────────
 
 # Info / OS / CPU / memory / baseboard / versions selection sets.
-# Drift history: #51 — InfoMemory and InfoVersions sub-selections didn't
-# match the live schema on some Unraid builds.
+# Drift history: #51 — InfoMemory lost its aggregated totals in favor of
+# per-DIMM ``layout`` entries, and InfoVersions was regrouped into
+# ``core`` / ``packages`` on Unraid API 4.32+. Keep the selection set
+# aligned with SCHEMA_EXPECTATIONS["InfoMemory"] / ["InfoVersions"].
 QUERY_INFO = """
 query Info {
     info {
+        id
         os { platform distro release codename kernel arch hostname uptime }
         cpu { manufacturer brand vendor family model stepping speed cores threads processors }
-        memory { total free used active available }
+        memory {
+            id
+            layout { size type clockSpeed formFactor manufacturer partNum serialNum bank }
+        }
         baseboard { manufacturer model version serial }
-        versions { unraid kernel openssl docker }
+        versions {
+            id
+            core { unraid kernel api }
+            packages { openssl docker node npm nginx php git pm2 }
+        }
     }
 }
 """
@@ -81,36 +91,44 @@ query ParityHistory {
 """
 
 # Physical disk roster + SMART status.
-# Drift history: #54 — Disk.temp was removed on newer builds; keep the
-# Disk field set aligned with SCHEMA_EXPECTATIONS["Disk"].
+# Drift history: #54 — on Unraid API 4.32+ ``Disk.temp`` was renamed to
+# ``temperature``, ``Disk.interface`` to ``interfaceType``, ``rotational``
+# was removed (closest live equivalent is the inverse of ``isSpinning``).
+# Keep the Disk field set aligned with SCHEMA_EXPECTATIONS["Disk"].
 QUERY_DISKS = """
 query Disks {
     disks {
-        id name device type size temp rotational interface serialNum smartStatus
+        id name device type vendor size temperature interfaceType serialNum smartStatus isSpinning
     }
 }
 """
 
 # Docker container roster + port mappings.
-# Drift history: #55 — root field Query.dockerContainers was missing on
-# some builds; #59 (sibling write mutations) renamed scalar ID types.
+# Drift history: #55 — top-level ``Query.dockerContainers`` was removed
+# in favor of a grouped ``docker.containers`` shape on Unraid API 4.32+,
+# and ``DockerContainer.networkMode`` no longer exists; #59 (sibling
+# write mutations) renamed scalar ID types.
 QUERY_DOCKER_CONTAINERS = """
 query DockerContainers {
-    dockerContainers {
-        id names image imageId command created state status ports {
-            ip privatePort publicPort type
+    docker {
+        containers {
+            id names image imageId command created state status
+            autoStart
+            ports { ip privatePort publicPort type }
         }
-        autoStart networkMode
     }
 }
 """
 
 # Docker network roster.
-# Drift history: #56 — root field Query.dockerNetworks was missing on
-# servers built without Docker support.
+# Drift history: #56 — top-level ``Query.dockerNetworks`` was removed in
+# favor of ``docker.networks`` on Unraid API 4.32+, mirroring the same
+# regrouping that hit ``Query.dockerContainers`` in #55.
 QUERY_DOCKER_NETWORKS = """
 query DockerNetworks {
-    dockerNetworks { id name driver scope created internal attachable ingress }
+    docker {
+        networks { id name driver scope created internal attachable ingress enableIPv6 }
+    }
 }
 """
 
@@ -144,12 +162,19 @@ query Users {
 """
 
 # Notification overviews.
-# Drift history: #58 — ``Notifications.type`` was removed; keep the
-# selection set aligned with SCHEMA_EXPECTATIONS["Notification"].
+# Drift history: #58 — on Unraid API 4.32+ the ``Notifications`` wrapper
+# lost its top-level ``type`` field and entries now live under
+# ``.list(filter: NotificationFilter)``. ``NotificationFilter.type`` is
+# required, so callers must pick UNREAD or ARCHIVE; ``limit`` and
+# ``offset`` round out the pagination cursor. Keep the entry-level
+# selection aligned with SCHEMA_EXPECTATIONS["Notification"].
 QUERY_NOTIFICATIONS = """
-query Notifications {
+query Notifications($type: NotificationType!, $limit: Int!, $offset: Int!) {
     notifications {
-        id type title subject description importance link timestamp formattedTimestamp
+        id
+        list(filter: { type: $type, limit: $limit, offset: $offset }) {
+            id type title subject description importance link timestamp formattedTimestamp
+        }
     }
 }
 """
@@ -169,14 +194,19 @@ query Registration { registration { state expiration type updateExpiration } }
 """
 
 # Unraid Connect remote-access settings.
-# Drift history: #53 — ``Connect.dynamicRemoteAccessType`` was renamed,
-# breaking the selection set on newer plugin versions.
+# Drift history: #53 — on Unraid API 4.32+ ``Connect.dynamicRemoteAccessType``
+# became a nested ``dynamicRemoteAccess { enabledType runningType error }``
+# object, and the legacy ``config { accessType forwardType port }`` fields
+# moved to the sibling top-level ``remoteAccess`` query. Both are fetched
+# in one round-trip so :meth:`UnraidClient.get_connect` can return a
+# combined shape.
 QUERY_CONNECT = """
 query Connect {
     connect {
-        dynamicRemoteAccessType
-        config { accessType forwardType port }
+        id
+        dynamicRemoteAccess { enabledType runningType error }
     }
+    remoteAccess { accessType forwardType port }
 }
 """
 
@@ -346,8 +376,7 @@ SCHEMA_EXPECTATIONS: dict[str, frozenset[str]] = {
             "array",
             "disks",
             "disk",
-            "dockerContainers",
-            "dockerNetworks",
+            "docker",
             "vms",
             "shares",
             "users",
@@ -355,6 +384,7 @@ SCHEMA_EXPECTATIONS: dict[str, frozenset[str]] = {
             "flash",
             "registration",
             "connect",
+            "remoteAccess",
             "parityHistory",
         },
     ),
@@ -377,8 +407,21 @@ SCHEMA_EXPECTATIONS: dict[str, frozenset[str]] = {
     ),
     # Top-level result types we select fields from
     "Disk": frozenset(
-        {"id", "name", "device", "type", "size", "temp", "rotational", "interface", "serialNum", "smartStatus"},
+        {
+            "id",
+            "name",
+            "device",
+            "type",
+            "vendor",
+            "size",
+            "temperature",
+            "interfaceType",
+            "serialNum",
+            "smartStatus",
+            "isSpinning",
+        },
     ),
+    "Docker": frozenset({"containers", "networks"}),
     "DockerContainer": frozenset(
         {
             "id",
@@ -391,14 +434,14 @@ SCHEMA_EXPECTATIONS: dict[str, frozenset[str]] = {
             "status",
             "ports",
             "autoStart",
-            "networkMode",
         },
     ),
     "DockerNetwork": frozenset(
-        {"id", "name", "driver", "scope", "created", "internal", "attachable", "ingress"},
+        {"id", "name", "driver", "scope", "created", "internal", "attachable", "ingress", "enableIPv6"},
     ),
     "Vms": frozenset({"domain"}),
     "VmDomain": frozenset({"uuid", "name", "state"}),
+    "Notifications": frozenset({"id", "list"}),
     "Notification": frozenset(
         {
             "id",
@@ -413,7 +456,16 @@ SCHEMA_EXPECTATIONS: dict[str, frozenset[str]] = {
         },
     ),
     "Flash": frozenset({"guid", "vendor", "product"}),
-    "Connect": frozenset({"dynamicRemoteAccessType", "config"}),
+    "Connect": frozenset({"id", "dynamicRemoteAccess"}),
+    "DynamicRemoteAccessStatus": frozenset({"enabledType", "runningType", "error"}),
+    "RemoteAccess": frozenset({"accessType", "forwardType", "port"}),
+    "InfoMemory": frozenset({"id", "layout"}),
+    "MemoryLayout": frozenset(
+        {"size", "type", "clockSpeed", "formFactor", "manufacturer", "partNum", "serialNum", "bank"},
+    ),
+    "InfoVersions": frozenset({"id", "core", "packages"}),
+    "CoreVersions": frozenset({"unraid", "kernel", "api"}),
+    "PackageVersions": frozenset({"openssl", "docker", "node", "npm", "nginx", "php", "git", "pm2"}),
 }
 
 
@@ -531,14 +583,40 @@ class UnraidClient(BaseGraphQLClient):
         return [Disk.model_validate(disk) for disk in _require_list(result, "disks")]
 
     async def list_containers(self) -> list[DockerContainer]:
-        """List all Docker containers."""
+        """List all Docker containers.
+
+        On Unraid API 4.32+ the field group lives at ``docker.containers``;
+        a present-but-null ``docker`` (Docker daemon unreachable on the
+        server) normalises to an empty list rather than raising — schema
+        drift only fires when the top-level ``docker`` key is missing.
+        """
         result = await self.query(QUERY_DOCKER_CONTAINERS)
-        return [DockerContainer.model_validate(c) for c in _require_list(result, "dockerContainers")]
+        docker = _require_dict(result, "docker")
+        containers = docker.get("containers")
+        if containers is None:
+            return []
+        if not isinstance(containers, list):
+            raise UnraidError(
+                f"Expected list for 'docker.containers' in GraphQL response, got {type(containers).__name__}",
+            )
+        return [DockerContainer.model_validate(c) for c in containers]
 
     async def list_docker_networks(self) -> list[DockerNetwork]:
-        """List Docker networks."""
+        """List Docker networks.
+
+        On Unraid API 4.32+ the field group lives at ``docker.networks``;
+        same null-tolerance behaviour as :meth:`list_containers`.
+        """
         result = await self.query(QUERY_DOCKER_NETWORKS)
-        return [DockerNetwork.model_validate(n) for n in _require_list(result, "dockerNetworks")]
+        docker = _require_dict(result, "docker")
+        networks = docker.get("networks")
+        if networks is None:
+            return []
+        if not isinstance(networks, list):
+            raise UnraidError(
+                f"Expected list for 'docker.networks' in GraphQL response, got {type(networks).__name__}",
+            )
+        return [DockerNetwork.model_validate(n) for n in networks]
 
     async def list_vms(self) -> Vms:
         """List all virtual machines.
@@ -560,10 +638,36 @@ class UnraidClient(BaseGraphQLClient):
         result = await self.query(QUERY_USERS)
         return [User.model_validate(user) for user in _require_list(result, "users")]
 
-    async def list_notifications(self) -> list[Notification]:
-        """List notifications."""
-        result = await self.query(QUERY_NOTIFICATIONS)
-        return [Notification.model_validate(n) for n in _require_list(result, "notifications")]
+    async def list_notifications(
+        self,
+        notification_type: str = "UNREAD",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[Notification]:
+        """List notifications (paginated via the server-side filter).
+
+        On Unraid API 4.32+ ``notifications.list`` is the entry list and
+        the wrapper requires a ``NotificationFilter`` argument — callers
+        pick ``UNREAD`` or ``ARCHIVE`` to choose which bin to read.
+
+        Args:
+            notification_type: ``UNREAD`` (default) or ``ARCHIVE``.
+            limit: Maximum entries to return.
+            offset: Pagination offset.
+        """
+        result = await self.query(
+            QUERY_NOTIFICATIONS,
+            variables={"type": notification_type, "limit": limit, "offset": offset},
+        )
+        notifications = _require_dict(result, "notifications")
+        entries = notifications.get("list")
+        if entries is None:
+            return []
+        if not isinstance(entries, list):
+            raise UnraidError(
+                f"Expected list for 'notifications.list' in GraphQL response, got {type(entries).__name__}",
+            )
+        return [Notification.model_validate(n) for n in entries]
 
     async def get_flash(self) -> dict[str, Any]:
         """Get Unraid USB flash drive metadata."""
@@ -576,9 +680,17 @@ class UnraidClient(BaseGraphQLClient):
         return _require_dict(result, "registration")
 
     async def get_connect(self) -> dict[str, Any]:
-        """Get Unraid Connect remote-access configuration."""
+        """Get Unraid Connect remote-access configuration.
+
+        Merges the live schema's ``connect { dynamicRemoteAccess }`` object
+        with the sibling top-level ``remoteAccess { accessType forwardType port }``
+        query so callers see one combined shape under the legacy ``connect``
+        key.
+        """
         result = await self.query(QUERY_CONNECT)
-        return _require_dict(result, "connect")
+        connect = _require_dict(result, "connect")
+        remote_access = result.get("remoteAccess") or {}
+        return {**connect, "remoteAccess": remote_access}
 
     # ── Write methods: array ────────────────────────────────────────────
 

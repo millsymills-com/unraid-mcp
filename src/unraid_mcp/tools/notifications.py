@@ -14,17 +14,30 @@ def register_notification_tools(mcp: FastMCP) -> None:
     """Register notification tools."""
 
     @unraid_tool(mcp, tags={"notifications"})
-    async def unraid_list_notifications(ctx: Context) -> list[Notification]:
-        """List active notifications (id, type, title, importance, timestamp).
+    async def unraid_list_notifications(
+        ctx: Context,
+        notification_type: str = "UNREAD",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[Notification]:
+        """List notifications (id, type, title, importance, timestamp).
 
         Args:
             ctx: FastMCP request context.
+            notification_type: Which bin to list — ``UNREAD`` (default) or ``ARCHIVE``.
+                The Unraid API 4.32+ schema requires this filter.
+            limit: Max entries to return (default 50).
+            offset: Pagination offset (default 0).
 
         Returns:
-            List of ``Notification`` models, one per active notification.
+            List of ``Notification`` models, one per entry in the selected bin.
         """
         client = require_client(ctx)
-        return await client.list_notifications()
+        return await client.list_notifications(
+            notification_type=notification_type,
+            limit=limit,
+            offset=offset,
+        )
 
     @unraid_tool(mcp, tags={"write", "notifications"}, annotations={"readOnlyHint": False, "destructiveHint": False})
     async def unraid_archive_notification(ctx: Context, notification_id: str) -> dict[str, Any]:
