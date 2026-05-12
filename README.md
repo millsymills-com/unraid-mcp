@@ -50,18 +50,20 @@ Detected 2 schema-drift issue(s):
 
 ### Continuous schema drift check (CI)
 
-The [`.github/workflows/schema-probe.yml`](.github/workflows/schema-probe.yml) workflow runs `unraid-mcp --check-schema` nightly (`0 7 * * *` UTC) against a live Unraid server held in repository secrets. CI tracks against the latest Unraid stable release. Forks that want the probe to run must set three Actions secrets:
+The [`.github/workflows/schema-probe.yml`](.github/workflows/schema-probe.yml) workflow runs `unraid-mcp --check-schema` nightly (`0 7 * * *` UTC) against a live Unraid server held in repository secrets. CI tracks against the latest Unraid stable release. Forks that want the probe to run must set two Actions secrets (with three optional overrides):
 
 ```
-UNRAID_TEST_HOST       # hostname or IP of a reachable test server
-UNRAID_TEST_API_KEY    # API key on that server
-UNRAID_VERIFY_SSL      # "true" or "false" — leave "true" unless using a self-signed cert
+UNRAID_HOST            # required — hostname or IP of a reachable test server
+UNRAID_API_KEY         # required — API key on that server
+UNRAID_PORT            # optional — overrides the default port
+UNRAID_USE_HTTPS       # optional — "true" / "false"
+UNRAID_VERIFY_SSL      # optional — "true" / "false", leave default unless using a self-signed cert
 ```
 
-The probe step is skipped automatically when those secrets are absent, so forks that don't have a test server see no failures. To opt out entirely, disable the workflow on your fork:
+The probe step is skipped automatically when the two required secrets are absent, so forks that don't have a test server see no failures. To opt out entirely, disable the workflow on your fork:
 
 ```bash
-gh workflow disable "Unraid schema compatibility"
+gh workflow disable "Schema Probe"
 ```
 
 ## Operational notes
