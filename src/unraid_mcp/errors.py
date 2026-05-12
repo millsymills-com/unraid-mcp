@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import NoReturn
+from typing import Any, NoReturn
 
 from fastmcp.exceptions import ToolError
 
@@ -35,7 +35,38 @@ class UnraidConnectionError(UnraidError):
 
 
 class UnraidGraphQLError(UnraidError):
-    """GraphQL response contained an ``errors`` array."""
+    """GraphQL response contained an ``errors`` array.
+
+    Preserves the structured fields the GraphQL spec guarantees so callers
+    (logs, metrics, error mappers) can distinguish ``GRAPHQL_VALIDATION_FAILED``
+    from ``UNAUTHENTICATED`` or ``INTERNAL_SERVER_ERROR`` instead of grepping
+    a concatenated message string.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        code: str | None = None,
+        errors: list[dict[str, Any]] | None = None,
+        path: list[Any] | None = None,
+        locations: list[dict[str, Any]] | None = None,
+    ) -> None:
+        super().__init__(message, status_code=status_code)
+        self.code = code
+        self.errors: list[dict[str, Any]] = list(errors) if errors else []
+        self.path = path
+        self.locations = locations
+
+
+class UnraidValidationError(UnraidGraphQLError):
+    """GraphQL ``GRAPHQL_VALIDATION_FAILED`` - the server rejected the query.
+
+    Distinct from :class:`UnraidGraphQLError` so the tool layer can surface an
+    actionable "upgrade unraid-mcp" message instead of dumping the raw server
+    stack trace at the model.
+    """
 
 
 class UnraidReadOnlyError(UnraidError):
@@ -55,6 +86,8 @@ class UnraidInitFailedError(UnraidError):
     """
 
 
+_VALIDATION_FAILURE_MESSAGE = "The server rejected this query - upgrade unraid-mcp. GraphQL validation failed: {error}"
+
 _ERROR_TEMPLATES: tuple[tuple[type[UnraidError], str, int], ...] = (
     (UnraidAuthError, "Authentication failed: {error}. Check your API key.", logging.WARNING),
     (UnraidNotFoundError, "Resource not found: {error}", logging.WARNING),
@@ -67,6 +100,7 @@ _ERROR_TEMPLATES: tuple[tuple[type[UnraidError], str, int], ...] = (
         "Unraid API initial connection failed: {error}. Check host, network, TLS, and key validity.",
         logging.ERROR,
     ),
+    (UnraidValidationError, _VALIDATION_FAILURE_MESSAGE, logging.WARNING),
     (UnraidGraphQLError, "GraphQL error: {error}", logging.WARNING),
     (UnraidError, "Unraid API error: {error}", logging.ERROR),
 )

@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- `UnraidClient` read methods now raise `UnraidError` when an expected
+  top-level field is missing from a GraphQL response. The previous
+  `result.get(key, default)` pattern silently turned schema drift (a
+  renamed or nested root field) into "no items" — operators saw empty
+  containers, no VMs, etc., with no signal. Null values are still
+  normalized to `{}` / `[]` per the GraphQL spec; only missing keys (and
+  wrong-typed values) raise. `# type: ignore[no-any-return]` dropped on
+  `get_flash` / `get_registration` / `get_connect` (#65).
+
 ### Removed
 - PyPI release pipeline (`.github/workflows/release.yml`) and the
   associated `scripts/smoke_install.sh` wheel smoke. The `unraid-mcp`
@@ -74,6 +84,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `client.close()`.
 
 ### Changed
+- `UnraidGraphQLError` now preserves the structured fields the GraphQL spec
+  guarantees: `extensions.code`, `path`, `locations`, and the raw `errors`
+  list. New `UnraidValidationError` subclass surfaces
+  `extensions.code == "GRAPHQL_VALIDATION_FAILED"`, and `handle_client_error`
+  routes it to an actionable "upgrade unraid-mcp" tool message instead of
+  dumping the raw GraphQL stack trace at the model (#69).
 - **Breaking:** `UNRAID_VERIFY_SSL` now defaults to `true`. Operators using
   self-signed LAN certs must set `UNRAID_VERIFY_SSL=false` in `.env` after
   upgrade or connections will fail TLS verification (#108).
