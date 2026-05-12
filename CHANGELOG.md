@@ -87,6 +87,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `client.close()`.
 
 ### Changed
+- `UnraidGraphQLError` now preserves the structured fields the GraphQL spec
+  guarantees: `extensions.code`, `path`, `locations`, and the raw `errors`
+  list. New `UnraidValidationError` subclass surfaces
+  `extensions.code == "GRAPHQL_VALIDATION_FAILED"`, and `handle_client_error`
+  routes it to an actionable "upgrade unraid-mcp" tool message instead of
+  dumping the raw GraphQL stack trace at the model (#69).
 - **Breaking:** `UNRAID_VERIFY_SSL` now defaults to `true`. Operators using
   self-signed LAN certs must set `UNRAID_VERIFY_SSL=false` in `.env` after
   upgrade or connections will fail TLS verification (#108).
