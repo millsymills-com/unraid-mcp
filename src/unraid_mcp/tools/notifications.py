@@ -6,7 +6,7 @@ from typing import Any
 
 from fastmcp import Context, FastMCP
 
-from unraid_mcp.models.notifications import Notification
+from unraid_mcp.models.notifications import Notification, NotificationImportance, NotificationType
 from unraid_mcp.tools._helpers import require_client, require_readwrite, unraid_tool
 
 
@@ -16,7 +16,7 @@ def register_notification_tools(mcp: FastMCP) -> None:
     @unraid_tool(mcp, tags={"notifications"})
     async def unraid_list_notifications(
         ctx: Context,
-        notification_type: str = "UNREAD",
+        notification_type: NotificationType = "UNREAD",
         limit: int = 50,
         offset: int = 0,
     ) -> list[Notification]:
@@ -57,7 +57,7 @@ def register_notification_tools(mcp: FastMCP) -> None:
     async def unraid_delete_notification(
         ctx: Context,
         notification_id: str,
-        notification_type: str = "UNREAD",
+        notification_type: NotificationType = "UNREAD",
     ) -> dict[str, Any]:
         """Permanently delete a notification by ID.
 
@@ -78,7 +78,7 @@ def register_notification_tools(mcp: FastMCP) -> None:
     @unraid_tool(mcp, tags={"write", "notifications"}, annotations={"readOnlyHint": False, "destructiveHint": True})
     async def unraid_archive_all_notifications(
         ctx: Context,
-        importance: str | None = None,
+        importance: NotificationImportance | None = None,
     ) -> dict[str, Any]:
         """Archive all active notifications.
 

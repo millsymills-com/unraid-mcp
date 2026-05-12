@@ -8,6 +8,16 @@ from fastmcp.exceptions import ToolError
 from unraid_mcp.models.notifications import Notification
 
 
+def _enum_values(schema: dict) -> set[str]:
+    """Extract enum values from a JSON-Schema property (handles direct enum or anyOf)."""
+    if "enum" in schema:
+        return set(schema["enum"])
+    for branch in schema.get("anyOf", []):
+        if "enum" in branch:
+            return set(branch["enum"])
+    raise AssertionError(f"no enum constraint found in {schema!r}")
+
+
 class TestListNotifications:
     async def test_returns_list(self, client_rw):
         client, mock = client_rw
@@ -85,3 +95,61 @@ class TestWriteNotificationOps:
         client, _ = client_ro
         with pytest.raises(ToolError, match="Unknown tool"):
             await client.call_tool("unraid_delete_notification", {"notification_id": "n1"})
+
+
+class TestNotificationLiteralSchemas:
+    """FastMCP renders ``Literal[...]`` as a JSON-Schema ``enum`` (#165).
+
+    Schema-level enums let the MCP runtime reject invalid inputs at boot
+    and dispatch — bare ``str`` would silently forward any string to the
+    Unraid GraphQL API.
+    """
+
+    async def test_list_notifications_type_is_enum_constrained(self, client_rw):
+        client, _ = client_rw
+        tools = await client.list_tools()
+        tool = next(t for t in tools if t.name == "unraid_list_notifications")
+        prop = tool.inputSchema["properties"]["notification_type"]
+        assert _enum_values(prop) == {"UNREAD", "ARCHIVE"}
+
+    async def test_delete_notification_type_is_enum_constrained(self, client_rw):
+        client, _ = client_rw
+        tools = await client.list_tools()
+        tool = next(t for t in tools if t.name == "unraid_delete_notification")
+        prop = tool.inputSchema["properties"]["notification_type"]
+        assert _enum_values(prop) == {"UNREAD", "ARCHIVE"}
+
+    async def test_archive_all_importance_is_enum_constrained(self, client_rw):
+        client, _ = client_rw
+        tools = await client.list_tools()
+        tool = next(t for t in tools if t.name == "unraid_archive_all_notifications")
+        prop = tool.inputSchema["properties"]["importance"]
+        assert _enum_values(prop) == {"INFO", "WARNING", "ALERT"}
+
+    async def test_delete_notification_rejects_invalid_type(self, client_rw):
+        client, _ = client_rw
+        with pytest.raises(ToolError):
+            await client.call_tool(
+                "unraid_delete_notification",
+                {"notification_id": "n1", "notification_type": "BOGUS"},
+            )
+
+    async def test_archive_all_rejects_invalid_importance(self, client_rw):
+        client, _ = client_rw
+        with pytest.raises(ToolError):
+            await client.call_tool(
+                "unraid_archive_all_notifications",
+                {"importance": "CRITICAL"},
+            )
+
+    @pytest.mark.parametrize("importance", ["INFO", "WARNING", "ALERT"])
+    async def test_archive_all_accepts_every_literal_value(self, client_rw, importance):
+        client, mock = client_rw
+        mock.archive_all_notifications.return_value = {
+            "archiveAll": {
+                "unread": {"total": 0, "info": 0, "warning": 0, "alert": 0},
+                "archive": {"total": 1, "info": 0, "warning": 0, "alert": 0},
+            },
+        }
+        await client.call_tool("unraid_archive_all_notifications", {"importance": importance})
+        mock.archive_all_notifications.assert_awaited_once_with(importance=importance)

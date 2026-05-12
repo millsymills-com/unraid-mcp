@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from unraid_mcp.models.common import UnraidBaseModel
+
+NotificationType = Literal["UNREAD", "ARCHIVE"]
+"""Which notification bin to act on (#61)."""
+
+NotificationImportance = Literal["INFO", "WARNING", "ALERT"]
+"""Server-side importance filter accepted by ``archiveAll`` (#61)."""
 
 
 class Notification(UnraidBaseModel):

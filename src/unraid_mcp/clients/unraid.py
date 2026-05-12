@@ -26,7 +26,7 @@ from unraid_mcp.errors import UnraidConnectionError, UnraidError, UnraidNotFound
 from unraid_mcp.models.array import ArrayState, ParityHistoryEntry
 from unraid_mcp.models.disks import Disk
 from unraid_mcp.models.docker import DockerContainer, DockerNetwork
-from unraid_mcp.models.notifications import Notification
+from unraid_mcp.models.notifications import Notification, NotificationImportance, NotificationType
 from unraid_mcp.models.shares import Share
 from unraid_mcp.models.system import SystemInfo
 from unraid_mcp.models.users import User
@@ -769,7 +769,7 @@ class UnraidClient(BaseGraphQLClient):
 
     async def list_notifications(
         self,
-        notification_type: str = "UNREAD",
+        notification_type: NotificationType = "UNREAD",
         limit: int = 50,
         offset: int = 0,
     ) -> list[Notification]:
@@ -945,7 +945,7 @@ class UnraidClient(BaseGraphQLClient):
     async def delete_notification(
         self,
         notification_id: str,
-        notification_type: str = "UNREAD",
+        notification_type: NotificationType = "UNREAD",
     ) -> dict[str, Any]:
         """Delete a notification by ID.
 
@@ -960,7 +960,7 @@ class UnraidClient(BaseGraphQLClient):
             variables={"id": notification_id, "type": notification_type},
         )
 
-    async def archive_all_notifications(self, importance: str | None = None) -> dict[str, Any]:
+    async def archive_all_notifications(self, importance: NotificationImportance | None = None) -> dict[str, Any]:
         """Archive all notifications.
 
         Args:
