@@ -77,6 +77,15 @@ class UnraidNotConfiguredError(UnraidError):
     """API key was not configured but a tool was called."""
 
 
+class UnraidInitFailedError(UnraidError):
+    """API key was configured, but initial validation failed at startup.
+
+    Distinct from :class:`UnraidNotConfiguredError` so operators don't get
+    misdirected to recheck their env vars when the real problem is host,
+    network, TLS, or an expired key.
+    """
+
+
 _VALIDATION_FAILURE_MESSAGE = "The server rejected this query - upgrade unraid-mcp. GraphQL validation failed: {error}"
 
 _ERROR_TEMPLATES: tuple[tuple[type[UnraidError], str, int], ...] = (
@@ -86,6 +95,11 @@ _ERROR_TEMPLATES: tuple[tuple[type[UnraidError], str, int], ...] = (
     (UnraidConnectionError, "Connection failed: {error}. Check host and network.", logging.ERROR),
     (UnraidReadOnlyError, "Write operation blocked: {error}. Server is in read-only mode.", logging.WARNING),
     (UnraidNotConfiguredError, "Unraid API not configured: {error}. Set UNRAID_API_KEY.", logging.WARNING),
+    (
+        UnraidInitFailedError,
+        "Unraid API initial connection failed: {error}. Check host, network, TLS, and key validity.",
+        logging.ERROR,
+    ),
     (UnraidValidationError, _VALIDATION_FAILURE_MESSAGE, logging.WARNING),
     (UnraidGraphQLError, "GraphQL error: {error}", logging.WARNING),
     (UnraidError, "Unraid API error: {error}", logging.ERROR),
