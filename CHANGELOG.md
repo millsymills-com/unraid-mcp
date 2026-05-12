@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- `unraid_get_container` and `unraid_get_disk` now issue direct
+  single-entity GraphQL queries (`Docker.container(id: PrefixedID!)` and
+  `Query.disk(id: PrefixedID!)`) instead of fetching the full roster and
+  scanning client-side. On Unraid API 4.32+ this is O(1) per lookup; on
+  older schemas without the singular fields the client catches
+  `GRAPHQL_VALIDATION_FAILED` and falls back to list-then-filter so the
+  tool surface stays identical. The Unraid schema does not expose a
+  singular `share` query, so `unraid_get_share` keeps the list-and-scan
+  path — encapsulated on the client now for symmetry. New
+  `UnraidClient.get_container`, `get_disk`, `get_share` methods own the
+  lookup logic; the corresponding `list_*` methods are unchanged (#36).
+
 ### Added
 - `unraid_get_me` read tool, backed by the new `Query.me` selection set
   (`{ id name description roles }`). Returns the single `UserAccount`

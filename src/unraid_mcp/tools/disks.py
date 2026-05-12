@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from fastmcp import Context, FastMCP
 
-from unraid_mcp.errors import UnraidNotFoundError
 from unraid_mcp.models.disks import Disk
 from unraid_mcp.tools._helpers import require_client, unraid_tool
 
@@ -37,8 +36,4 @@ def register_disk_tools(mcp: FastMCP) -> None:
             ``Disk`` model for the matching disk.
         """
         client = require_client(ctx)
-        disks = await client.list_disks()
-        for disk in disks:
-            if disk_id in (disk.id, disk.name):
-                return disk
-        raise UnraidNotFoundError(f"Disk with id '{disk_id}' not found")
+        return await client.get_disk(disk_id)

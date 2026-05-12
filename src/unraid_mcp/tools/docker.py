@@ -6,7 +6,6 @@ from typing import Any
 
 from fastmcp import Context, FastMCP
 
-from unraid_mcp.errors import UnraidNotFoundError
 from unraid_mcp.models.docker import DockerContainer, DockerNetwork
 from unraid_mcp.tools._helpers import require_client, require_readwrite, unraid_tool
 
@@ -41,15 +40,7 @@ def register_docker_tools(mcp: FastMCP) -> None:
             ``DockerContainer`` model for the matching container.
         """
         client = require_client(ctx)
-        containers = await client.list_containers()
-        target = container_id.lstrip("/")
-        for container in containers:
-            if container.id == container_id:
-                return container
-            names = container.names or []
-            if any(name.lstrip("/") == target for name in names):
-                return container
-        raise UnraidNotFoundError(f"Container '{container_id}' not found")
+        return await client.get_container(container_id)
 
     @unraid_tool(mcp, tags={"docker"})
     async def unraid_list_docker_networks(ctx: Context) -> list[DockerNetwork]:
