@@ -22,7 +22,7 @@ from typing import Any
 import httpx
 
 from unraid_mcp.clients.base import BaseGraphQLClient
-from unraid_mcp.errors import UnraidConnectionError
+from unraid_mcp.errors import UnraidConnectionError, UnraidError
 from unraid_mcp.models.array import ArrayState, ParityHistoryEntry
 from unraid_mcp.models.disks import Disk
 from unraid_mcp.models.docker import DockerContainer, DockerNetwork
@@ -466,6 +466,45 @@ def compute_schema_drift(
     return drifts
 
 
+def _require_dict(result: dict[str, Any], key: str) -> dict[str, Any]:
+    """Return ``result[key]`` as a dict, raising on missing or wrong-typed values.
+
+    A null value is normalized to an empty dict — the GraphQL contract allows
+    a present-but-null field. A missing top-level key is treated as schema
+    drift and raised so callers do not silently see empty results (#65).
+    """
+    if key not in result:
+        raise UnraidError(
+            f"Missing '{key}' in GraphQL response; got keys {sorted(result.keys())}. "
+            "This usually means the server schema changed — run `unraid-mcp --check-schema`.",
+        )
+    value = result[key]
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise UnraidError(f"Expected dict for '{key}' in GraphQL response, got {type(value).__name__}")
+    return value
+
+
+def _require_list(result: dict[str, Any], key: str) -> list[Any]:
+    """Return ``result[key]`` as a list, raising on missing or wrong-typed values.
+
+    Null is normalized to ``[]``. Missing key is raised so schema drift is not
+    silently reported as "no items" (#65).
+    """
+    if key not in result:
+        raise UnraidError(
+            f"Missing '{key}' in GraphQL response; got keys {sorted(result.keys())}. "
+            "This usually means the server schema changed — run `unraid-mcp --check-schema`.",
+        )
+    value = result[key]
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise UnraidError(f"Expected list for '{key}' in GraphQL response, got {type(value).__name__}")
+    return value
+
+
 class UnraidClient(BaseGraphQLClient):
     """Typed wrapper around the Unraid GraphQL API."""
 
@@ -474,88 +513,72 @@ class UnraidClient(BaseGraphQLClient):
     async def get_info(self) -> SystemInfo:
         """Get system information (OS, CPU, memory, baseboard, versions)."""
         result = await self.query(QUERY_INFO)
-        return SystemInfo.model_validate(result.get("info") or {})
+        return SystemInfo.model_validate(_require_dict(result, "info"))
 
     async def get_array(self) -> ArrayState:
         """Get array status, capacity, parity, disks, and caches."""
         result = await self.query(QUERY_ARRAY)
-        return ArrayState.model_validate(result.get("array") or {})
+        return ArrayState.model_validate(_require_dict(result, "array"))
 
     async def get_parity_history(self) -> list[ParityHistoryEntry]:
         """Get parity check history."""
         result = await self.query(QUERY_PARITY_HISTORY)
-        history = result.get("parityHistory") or []
-        if not isinstance(history, list):
-            return []
-        return [ParityHistoryEntry.model_validate(entry) for entry in history]
+        return [ParityHistoryEntry.model_validate(entry) for entry in _require_list(result, "parityHistory")]
 
     async def list_disks(self) -> list[Disk]:
         """List all physical disks (system-wide)."""
         result = await self.query(QUERY_DISKS)
-        disks = result.get("disks") or []
-        if not isinstance(disks, list):
-            return []
-        return [Disk.model_validate(disk) for disk in disks]
+        return [Disk.model_validate(disk) for disk in _require_list(result, "disks")]
 
     async def list_containers(self) -> list[DockerContainer]:
         """List all Docker containers."""
         result = await self.query(QUERY_DOCKER_CONTAINERS)
-        containers = result.get("dockerContainers") or []
-        if not isinstance(containers, list):
-            return []
-        return [DockerContainer.model_validate(container) for container in containers]
+        return [DockerContainer.model_validate(c) for c in _require_list(result, "dockerContainers")]
 
     async def list_docker_networks(self) -> list[DockerNetwork]:
         """List Docker networks."""
         result = await self.query(QUERY_DOCKER_NETWORKS)
-        networks = result.get("dockerNetworks") or []
-        if not isinstance(networks, list):
-            return []
-        return [DockerNetwork.model_validate(network) for network in networks]
+        return [DockerNetwork.model_validate(n) for n in _require_list(result, "dockerNetworks")]
 
     async def list_vms(self) -> Vms:
-        """List all virtual machines."""
+        """List all virtual machines.
+
+        Returns the ``Vms`` envelope model (``{domain: [...]}``). The wrapping
+        type is set by the GraphQL schema — the list itself lives at
+        ``Vms.domain``.
+        """
         result = await self.query(QUERY_VMS)
-        return Vms.model_validate(result.get("vms") or {})
+        return Vms.model_validate(_require_dict(result, "vms"))
 
     async def list_shares(self) -> list[Share]:
         """List user shares."""
         result = await self.query(QUERY_SHARES)
-        shares = result.get("shares") or []
-        if not isinstance(shares, list):
-            return []
-        return [Share.model_validate(share) for share in shares]
+        return [Share.model_validate(share) for share in _require_list(result, "shares")]
 
     async def list_users(self) -> list[User]:
         """List Unraid users."""
         result = await self.query(QUERY_USERS)
-        users = result.get("users") or []
-        if not isinstance(users, list):
-            return []
-        return [User.model_validate(user) for user in users]
+        return [User.model_validate(user) for user in _require_list(result, "users")]
 
     async def list_notifications(self) -> list[Notification]:
         """List notifications."""
         result = await self.query(QUERY_NOTIFICATIONS)
-        notifications = result.get("notifications") or []
-        if not isinstance(notifications, list):
-            return []
-        return [Notification.model_validate(notification) for notification in notifications]
+        return [Notification.model_validate(n) for n in _require_list(result, "notifications")]
 
     async def get_flash(self) -> dict[str, Any]:
         """Get Unraid USB flash drive metadata."""
         result = await self.query(QUERY_FLASH)
-        return result.get("flash", {})  # type: ignore[no-any-return]
+        return _require_dict(result, "flash")
 
     async def get_registration(self) -> dict[str, Any]:
         """Get Unraid registration info (license type, expiration)."""
         result = await self.query(QUERY_REGISTRATION)
-        return result.get("registration", {})  # type: ignore[no-any-return]
+        return _require_dict(result, "registration")
 
     async def get_connect(self) -> dict[str, Any]:
         """Get Unraid Connect remote-access configuration."""
         result = await self.query(QUERY_CONNECT)
-        return result.get("connect", {})  # type: ignore[no-any-return]
+        return _require_dict(result, "connect")
 
     # ── Write methods: array ────────────────────────────────────────────
 
