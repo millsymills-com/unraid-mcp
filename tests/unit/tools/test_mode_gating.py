@@ -19,7 +19,7 @@ from fastmcp.server.lifespan import lifespan as fastmcp_lifespan
 
 from unraid_mcp.config import UnraidConfig
 from unraid_mcp.errors import UnraidInitFailedError, UnraidNotConfiguredError, UnraidReadOnlyError
-from unraid_mcp.tools._helpers import require_client, require_readwrite, require_user_mutation
+from unraid_mcp.tools._helpers import require_client, require_readwrite
 from unraid_mcp.tools.array import register_array_tools
 
 
@@ -79,38 +79,6 @@ class TestRequireReadwrite:
         ctx = _fake_ctx(config=config, client=None)
         with pytest.raises(UnraidReadOnlyError):
             require_readwrite(ctx, "stop array")
-
-
-class TestRequireUserMutation:
-    def test_returns_client_when_fully_enabled(self):
-        config = UnraidConfig(
-            unraid_api_key="k",
-            unraid_mode="readwrite",
-            unraid_allow_user_mutations=True,
-        )
-        stub = object()
-        ctx = _fake_ctx(config=config, client=stub)
-        assert require_user_mutation(ctx, "create user") is stub
-
-    def test_raises_in_readonly_mode(self):
-        config = UnraidConfig(
-            unraid_api_key="k",
-            unraid_mode="readonly",
-            unraid_allow_user_mutations=True,
-        )
-        ctx = _fake_ctx(config=config, client=object())
-        with pytest.raises(UnraidReadOnlyError, match="read-only mode"):
-            require_user_mutation(ctx, "create user")
-
-    def test_raises_when_user_mutations_disabled_in_readwrite(self):
-        config = UnraidConfig(
-            unraid_api_key="k",
-            unraid_mode="readwrite",
-            unraid_allow_user_mutations=False,
-        )
-        ctx = _fake_ctx(config=config, client=object())
-        with pytest.raises(UnraidReadOnlyError, match="UNRAID_ALLOW_USER_MUTATIONS"):
-            require_user_mutation(ctx, "delete user")
 
 
 class TestRuntimeGuardEndToEnd:

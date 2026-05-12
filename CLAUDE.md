@@ -70,7 +70,7 @@ src/unraid_mcp/
     ├── docker.py        # list / get container, list networks, start/stop/restart/pause/unpause
     ├── vms.py           # list / start / stop / force_stop / pause / resume / reboot
     ├── shares.py        # list / get share
-    ├── users.py         # list / create / delete
+    ├── users.py         # get_me (Unraid 7.2+ dropped Query.users/addUser/deleteUser)
     └── notifications.py # list / archive / delete / archive_all
 ```
 

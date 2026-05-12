@@ -12,10 +12,14 @@ Production-grade Python MCP server for the Unraid GraphQL API.
 
 ## Features
 
-- **MCP tools** covering Unraid system info, array, disks, Docker, VMs, shares, users, notifications, and parity checks
+- **MCP tools** covering Unraid system info, array, disks, Docker, VMs, shares, the authenticated user account, notifications, and parity checks
 - **Read/write mode separation** — write tools invisible in readonly mode (`mcp.disable(tags={"write"})`) with runtime defense-in-depth
 - **Single-endpoint GraphQL client** — `httpx` async client over the Unraid `/graphql` endpoint with `tenacity` retry and typed error mapping
 - **Typed, linted, tested** — strict ty, ruff, pytest with CI on Python 3.13
+
+### Removed in this release
+
+Unraid 7.2+ removed `Query.users`, `addUser`, and `deleteUser` from the GraphQL API, so this MCP server can no longer expose them. The previous `unraid_list_users`, `unraid_create_user`, and `unraid_delete_user` tools have been dropped, along with the `UNRAID_ALLOW_USER_MUTATIONS` and `UNRAID_NEW_USER_*` environment variables. A new read-only `unraid_get_me` tool replaces `unraid_list_users` by returning the single `UserAccount` matching the API key in use via `Query.me`.
 
 ## Quick Start
 
@@ -68,10 +72,9 @@ gh workflow disable "Schema Probe"
 
 ## Operational notes
 
-- **Read-only by default.** `UNRAID_MODE` defaults to `readonly`; write tools (start/stop/restart, parity controls, user mutations) are hidden until you set `UNRAID_MODE=readwrite`. The mode is also re-checked at call time, so a forgotten env var can't quietly expose writes.
+- **Read-only by default.** `UNRAID_MODE` defaults to `readonly`; write tools (start/stop/restart, parity controls) are hidden until you set `UNRAID_MODE=readwrite`. The mode is also re-checked at call time, so a forgotten env var can't quietly expose writes.
 - **TLS verification on by default.** `UNRAID_VERIFY_SSL=true`. Set it to `false` only on trusted networks with self-signed certs — a forged cert can intercept your API key and proxy mutations through your client.
 - **GraphQL must be enabled in Unraid.** The endpoint at `/graphql` is gated behind **Settings → Management Access → Developer Options** in the Unraid WebGUI; enable it once per server before the MCP client connects.
-- **User mutations are double-gated.** Even in `readwrite` mode, `unraid_create_user` / `unraid_delete_user` stay hidden until `UNRAID_ALLOW_USER_MUTATIONS=true`.
 
 ## MCP client setup
 
@@ -160,7 +163,7 @@ Then set env vars in the same shell, or use `claude mcp add unraid --env UNRAID_
 
 ### Enabling write tools
 
-The server starts in read-only mode by default. To expose the `start/stop/restart` family, set `UNRAID_MODE=readwrite` in the client's `env` block. To additionally expose `unraid_create_user` / `unraid_delete_user`, also set `UNRAID_ALLOW_USER_MUTATIONS=true` — these are double-gated because they modify OS-level accounts.
+The server starts in read-only mode by default. To expose the `start/stop/restart` family, set `UNRAID_MODE=readwrite` in the client's `env` block.
 
 ## Running in Docker
 
@@ -224,8 +227,6 @@ See [.env.example](.env.example) for all configuration options.
 | `UNRAID_USE_HTTPS` | `true` | Use HTTPS (set false for plain HTTP) |
 | `UNRAID_API_KEY` | — | API key from Unraid WebGUI |
 | `UNRAID_VERIFY_SSL` | `true` | Verify TLS cert. Set `false` only for self-signed LAN certs (accepts MITM risk). |
-| `UNRAID_ALLOW_USER_MUTATIONS` | `false` | Secondary switch for `unraid_create_user` / `unraid_delete_user`; even in `readwrite` mode these stay hidden unless this is `true` |
-| `UNRAID_NEW_USER_*` | — | When set, can be referenced via `password_env_var` on `unraid_create_user` so the password stays out of MCP transcripts. Name must start with `UNRAID_NEW_USER_`. |
 
 ## Development
 

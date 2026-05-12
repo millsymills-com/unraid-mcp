@@ -74,7 +74,6 @@ async def _check_config() -> int:
     print("unraid-mcp configuration check")
     print(f"  version:         {__version__}")
     print(f"  mode:            {config.unraid_mode.value}")
-    print(f"  user mutations:  {'enabled' if config.unraid_allow_user_mutations else 'disabled'}")
     print(f"  endpoint:        {config.graphql_url}")
     print(f"  api key:         {_redact_api_key(config.unraid_api_key)}")
     print(f"  verify TLS:      {config.unraid_verify_ssl}")

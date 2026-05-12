@@ -39,7 +39,6 @@ class TestModeGating:
         assert "unraid_start_array" not in tool_names
         assert "unraid_stop_array" not in tool_names
         assert "unraid_start_container" not in tool_names
-        assert "unraid_delete_user" not in tool_names
         assert "unraid_archive_notification" not in tool_names
         # Read tools should be visible
         assert "unraid_get_info" in tool_names
@@ -47,10 +46,9 @@ class TestModeGating:
         assert "unraid_list_containers" in tool_names
         assert "unraid_list_vms" in tool_names
         assert "unraid_list_shares" in tool_names
+        assert "unraid_get_me" in tool_names
 
     async def test_write_tools_enabled_in_readwrite_mode(self):
-        # User-mutation tools require the additional UNRAID_ALLOW_USER_MUTATIONS flag;
-        # assert the other write tools are visible in readwrite mode alone.
         config = _make_config(unraid_mode=UnraidMode.READWRITE)
         server = create_server(config)
         tools = await server.list_tools()
@@ -63,23 +61,20 @@ class TestModeGating:
         assert "unraid_archive_notification" in tool_names
         # Read tools should still be visible
         assert "unraid_get_info" in tool_names
-        # User-mutation tools stay hidden until the secondary flag is set
-        assert "unraid_create_user" not in tool_names
-        assert "unraid_delete_user" not in tool_names
+        assert "unraid_get_me" in tool_names
 
-    async def test_user_mutation_tools_require_explicit_flag(self):
-        config = _make_config(unraid_mode=UnraidMode.READWRITE, unraid_allow_user_mutations=True)
-        server = create_server(config)
-        tool_names = {t.name for t in await server.list_tools()}
-        assert "unraid_create_user" in tool_names
-        assert "unraid_delete_user" in tool_names
-
-    async def test_user_mutation_tools_hidden_in_readonly_even_with_flag(self):
-        config = _make_config(unraid_mode=UnraidMode.READONLY, unraid_allow_user_mutations=True)
-        server = create_server(config)
-        tool_names = {t.name for t in await server.list_tools()}
-        assert "unraid_create_user" not in tool_names
-        assert "unraid_delete_user" not in tool_names
+    async def test_user_account_tool_is_read_only(self):
+        # Removed in #57: there is no longer a `unraid_create_user` /
+        # `unraid_delete_user`. The only remaining user-domain tool is the
+        # read-only `unraid_get_me`, which must be exposed in both modes
+        # and the create/delete tools must never reappear.
+        for mode in (UnraidMode.READONLY, UnraidMode.READWRITE):
+            config = _make_config(unraid_mode=mode)
+            tool_names = {t.name for t in await create_server(config).list_tools()}
+            assert "unraid_get_me" in tool_names
+            assert "unraid_create_user" not in tool_names
+            assert "unraid_delete_user" not in tool_names
+            assert "unraid_list_users" not in tool_names
 
     async def test_tool_count_readonly_has_fewer_tools(self):
         config_ro = _make_config(unraid_mode=UnraidMode.READONLY)
@@ -134,19 +129,6 @@ class TestLifespanValidation:
         async with make_server_lifespan(config)(server) as context:
             assert context["client"] is None
             assert context["config"].unraid_api_key is None
-
-
-class TestCreateUserSchema:
-    """`unraid_create_user`'s password parameter must advertise sensitive-data hints."""
-
-    async def test_password_field_has_password_format(self):
-        config = _make_config(unraid_mode=UnraidMode.READWRITE, unraid_allow_user_mutations=True)
-        server = create_server(config)
-        tools = await server.list_tools()
-        tool = next(t for t in tools if t.name == "unraid_create_user")
-        password_schema = tool.parameters["properties"]["password"]
-        assert password_schema["format"] == "password"
-        assert password_schema["writeOnly"] is True
 
 
 class TestSchemaDriftWarnings:

@@ -7,11 +7,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- `unraid_get_me` read tool, backed by the new `Query.me` selection set
+  (`{ id name description roles }`). Returns the single `UserAccount`
+  matching the API key in use — the only account coverage left after
+  Unraid 7.2+ removed `Query.users` from the GraphQL API (#57).
 - README subsection documenting the nightly `--check-schema` CI probe,
   the Actions secrets required to enable it on a fork (`UNRAID_HOST`
   and `UNRAID_API_KEY`, plus optional `UNRAID_PORT` /
   `UNRAID_USE_HTTPS` / `UNRAID_VERIFY_SSL` overrides), and how to
   disable the workflow if a fork doesn't operate a test server (#153).
+
+### Removed
+- **Breaking:** `unraid_list_users`, `unraid_create_user`, and
+  `unraid_delete_user` tools. Unraid 7.2+ removed `Query.users`,
+  `addUser`, and `deleteUser` from the GraphQL API, so the MCP
+  server can no longer expose them. Use `unraid_get_me` (returns
+  the authenticated account) for the remaining read coverage; manage
+  Unraid users via the WebGUI or `unraid-api` CLI on the server (#57).
+- **Breaking:** `UNRAID_ALLOW_USER_MUTATIONS` and `UNRAID_NEW_USER_*`
+  environment variables. The secondary `user-mutation` tag gate, the
+  `require_user_mutation` helper, and the `password_env_var` argument
+  resolution are gone with the tools they protected (#57).
 
 ### Fixed
 - Aligned six read queries with the Unraid API 4.32+ schema, verified

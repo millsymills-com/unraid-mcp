@@ -155,12 +155,10 @@ async def test_list_shares_includes_any_share(live_client):
 # ── Users ──────────────────────────────────────────────────────────────
 
 
-async def test_list_users_includes_root(live_client):
-    """`root` is always present on an Unraid server."""
-    users = await live_client.list_users()
-    assert isinstance(users, list)
-    names = {u.name for u in users if u.name}
-    assert "root" in names, f"expected 'root' user, got {names}"
+async def test_get_me_returns_authenticated_user(live_client):
+    """`Query.me` returns the account matching the API key in use."""
+    me = await live_client.get_me()
+    assert me.name, f"expected a name on the authenticated user, got {me!r}"
 
 
 # ── Notifications ──────────────────────────────────────────────────────

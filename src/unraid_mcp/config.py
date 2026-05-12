@@ -42,13 +42,6 @@ class UnraidConfig(BaseSettings):
     unraid_request_timeout: int = Field(default=30, gt=0)
     unraid_max_retries: int = Field(default=3, ge=0)
 
-    # Feature gates
-    # Secondary switch on top of `unraid_mode`. When False (default), the
-    # `unraid_create_user` and `unraid_delete_user` tools stay hidden even
-    # in readwrite mode — useful for operators who want container/VM writes
-    # but not account mutation.
-    unraid_allow_user_mutations: bool = False
-
     @property
     def enable_write_tools(self) -> bool:
         """Whether write-tool registration is allowed (env-flag write-gate).
