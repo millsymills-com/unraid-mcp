@@ -35,7 +35,8 @@ def register_vm_tools(mcp: FastMCP) -> None:
             vm_id: VM UUID.
 
         Returns:
-            Raw GraphQL mutation response payload.
+            ``{"ok": bool, "id": vm_id}`` — ``ok`` reflects the server's
+            ``Boolean!`` reply (#60) and ``id`` echoes the target VM.
         """
         client = require_readwrite(ctx, "start VM")
         return await client.start_vm(vm_id)
@@ -49,7 +50,8 @@ def register_vm_tools(mcp: FastMCP) -> None:
             vm_id: VM UUID.
 
         Returns:
-            Raw GraphQL mutation response payload.
+            ``{"ok": bool, "id": vm_id}`` — normalised from the server's
+            ``Boolean!`` reply (#60).
         """
         client = require_readwrite(ctx, "stop VM")
         return await client.stop_vm(vm_id)
@@ -63,7 +65,8 @@ def register_vm_tools(mcp: FastMCP) -> None:
             vm_id: VM UUID.
 
         Returns:
-            Raw GraphQL mutation response payload.
+            ``{"ok": bool, "id": vm_id}`` — normalised from the server's
+            ``Boolean!`` reply (#60).
         """
         client = require_readwrite(ctx, "force-stop VM")
         return await client.force_stop_vm(vm_id)
@@ -77,7 +80,8 @@ def register_vm_tools(mcp: FastMCP) -> None:
             vm_id: VM UUID.
 
         Returns:
-            Raw GraphQL mutation response payload.
+            ``{"ok": bool, "id": vm_id}`` — normalised from the server's
+            ``Boolean!`` reply (#60).
         """
         client = require_readwrite(ctx, "pause VM")
         return await client.pause_vm(vm_id)
@@ -91,7 +95,8 @@ def register_vm_tools(mcp: FastMCP) -> None:
             vm_id: VM UUID.
 
         Returns:
-            Raw GraphQL mutation response payload.
+            ``{"ok": bool, "id": vm_id}`` — normalised from the server's
+            ``Boolean!`` reply (#60).
         """
         client = require_readwrite(ctx, "resume VM")
         return await client.resume_vm(vm_id)
@@ -105,7 +110,8 @@ def register_vm_tools(mcp: FastMCP) -> None:
             vm_id: VM UUID.
 
         Returns:
-            Raw GraphQL mutation response payload.
+            ``{"ok": bool, "id": vm_id}`` — normalised from the server's
+            ``Boolean!`` reply (#60).
         """
         client = require_readwrite(ctx, "reboot VM")
         return await client.reboot_vm(vm_id)

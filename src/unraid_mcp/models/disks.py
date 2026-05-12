@@ -19,7 +19,7 @@ class Disk(UnraidBaseModel):
     device: str | None = None
     type: str | None = None
     vendor: str | None = None
-    size: int | None = None
+    size: str | None = None
     temperature: float | None = None
     interface_type: str | None = None
     serial_num: str | None = None
