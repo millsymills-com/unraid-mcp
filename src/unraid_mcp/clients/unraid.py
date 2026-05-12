@@ -742,17 +742,36 @@ class UnraidClient(BaseGraphQLClient):
         return await self.mutate(MUTATION_STOP_CONTAINER, variables={"id": container_id})
 
     async def restart_container(self, container_id: str) -> dict[str, Any]:
-        """Restart a Docker container by ID.
+        """Restart a Docker container by stopping then starting it.
 
         ``docker.restart`` was removed from the live schema in #59, so the
         client implements restart as a stop → start sequence on the
         caller's behalf. The returned payload merges both mutation
         responses under ``stop`` and ``start`` keys so callers still see
         the underlying GraphQL data when they need it.
+
+        **Partial-failure note:** if the stop succeeds but the start
+        fails, the container is left stopped — the raised
+        :class:`UnraidError` mentions that the stop already completed so
+        operators know which way to roll forward (call
+        ``unraid_start_container`` to bring it back up). If the stop
+        itself fails there is no partial state to report and the
+        underlying exception propagates unchanged.
+
+        Returns:
+            ``{"stop": <stop response>, "start": <start response>}`` on
+            success.
         """
-        stop = await self.stop_container(container_id)
-        start = await self.start_container(container_id)
-        return {"stop": stop, "start": start}
+        stop_result = await self.stop_container(container_id)
+        try:
+            start_result = await self.start_container(container_id)
+        except UnraidError as exc:
+            raise UnraidError(
+                f"Container '{container_id}' was stopped successfully but "
+                f"restart failed during start: {exc}. The container is "
+                f"currently stopped; call unraid_start_container to recover.",
+            ) from exc
+        return {"stop": stop_result, "start": start_result}
 
     async def pause_container(self, container_id: str) -> dict[str, Any]:
         """Pause a Docker container by ID."""
