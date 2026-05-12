@@ -14,6 +14,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   disable the workflow if a fork doesn't operate a test server (#153).
 
 ### Changed
+- Schema-probe workflow (`.github/workflows/schema-probe.yml`) now
+  publishes drift output to `$GITHUB_STEP_SUMMARY` on failure and
+  auto-creates / updates a GitHub issue labelled `bug,schema-drift`
+  with the drift report. De-duplicates by reusing the oldest open
+  drift issue. Operators can opt out per run via the
+  `suppress_issue` workflow_dispatch input. The job still exits red
+  on drift so required-status-check semantics are preserved (#152).
+
+### Changed
 - Centralised the per-tool error-handling boilerplate behind a new
   `unraid_tool` decorator in `tools/_helpers.py`. Every tool in
   `tools/{system,array,parity,disks,docker,vms,shares,users,notifications}.py`
