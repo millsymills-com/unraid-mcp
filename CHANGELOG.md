@@ -14,7 +14,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   disable the workflow if a fork doesn't operate a test server (#153).
 
 ### Fixed
-<<<<<<< HEAD
 - Aligned the Docker, VM, notification, array, and parity write
   mutations with the Unraid API 4.32+ schema. `SCHEMA_EXPECTATIONS`
   is updated in lockstep so `unraid-mcp --check-schema` keeps catching
