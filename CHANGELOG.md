@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- README subsection documenting the nightly `--check-schema` CI probe,
+  the Actions secrets required to enable it on a fork (`UNRAID_HOST`
+  and `UNRAID_API_KEY`, plus optional `UNRAID_PORT` /
+  `UNRAID_USE_HTTPS` / `UNRAID_VERIFY_SSL` overrides), and how to
+  disable the workflow if a fork doesn't operate a test server (#153).
+
 ### Changed
 - Schema-probe workflow (`.github/workflows/schema-probe.yml`) now
   publishes drift output to `$GITHUB_STEP_SUMMARY` on failure and
