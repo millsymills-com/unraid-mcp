@@ -6,9 +6,9 @@ from typing import Any
 
 from fastmcp import Context, FastMCP
 
-from unraid_mcp.errors import UnraidNotFoundError, handle_client_error
+from unraid_mcp.errors import UnraidNotFoundError
 from unraid_mcp.models.docker import DockerContainer, DockerNetwork
-from unraid_mcp.tools._helpers import require_client, require_readwrite
+from unraid_mcp.tools._helpers import require_client, require_readwrite, unraid_tool
 
 
 def register_docker_tools(mcp: FastMCP) -> None:
@@ -16,7 +16,7 @@ def register_docker_tools(mcp: FastMCP) -> None:
 
     # ── Read tools ──────────────────────────────────────────────────────
 
-    @mcp.tool(tags={"docker"})
+    @unraid_tool(mcp, tags={"docker"})
     async def unraid_list_containers(ctx: Context) -> list[DockerContainer]:
         """List all Docker containers with status, image, ports, and network mode.
 
@@ -26,13 +26,10 @@ def register_docker_tools(mcp: FastMCP) -> None:
         Returns:
             List of ``DockerContainer`` models, one per container known to Docker.
         """
-        try:
-            client = require_client(ctx)
-            return await client.list_containers()
-        except Exception as e:
-            handle_client_error(e)
+        client = require_client(ctx)
+        return await client.list_containers()
 
-    @mcp.tool(tags={"docker"})
+    @unraid_tool(mcp, tags={"docker"})
     async def unraid_get_container(ctx: Context, container_id: str) -> DockerContainer:
         """Get detailed info for a specific Docker container by ID or name.
 
@@ -43,21 +40,18 @@ def register_docker_tools(mcp: FastMCP) -> None:
         Returns:
             ``DockerContainer`` model for the matching container.
         """
-        try:
-            client = require_client(ctx)
-            containers = await client.list_containers()
-            target = container_id.lstrip("/")
-            for container in containers:
-                if container.id == container_id:
-                    return container
-                names = container.names or []
-                if any(name.lstrip("/") == target for name in names):
-                    return container
-            raise UnraidNotFoundError(f"Container '{container_id}' not found")
-        except Exception as e:
-            handle_client_error(e)
+        client = require_client(ctx)
+        containers = await client.list_containers()
+        target = container_id.lstrip("/")
+        for container in containers:
+            if container.id == container_id:
+                return container
+            names = container.names or []
+            if any(name.lstrip("/") == target for name in names):
+                return container
+        raise UnraidNotFoundError(f"Container '{container_id}' not found")
 
-    @mcp.tool(tags={"docker"})
+    @unraid_tool(mcp, tags={"docker"})
     async def unraid_list_docker_networks(ctx: Context) -> list[DockerNetwork]:
         """List Docker networks (id, name, driver, scope).
 
@@ -67,15 +61,12 @@ def register_docker_tools(mcp: FastMCP) -> None:
         Returns:
             List of ``DockerNetwork`` models, one per Docker network.
         """
-        try:
-            client = require_client(ctx)
-            return await client.list_docker_networks()
-        except Exception as e:
-            handle_client_error(e)
+        client = require_client(ctx)
+        return await client.list_docker_networks()
 
     # ── Write tools ─────────────────────────────────────────────────────
 
-    @mcp.tool(tags={"write", "docker"}, annotations={"readOnlyHint": False, "destructiveHint": False})
+    @unraid_tool(mcp, tags={"write", "docker"}, annotations={"readOnlyHint": False, "destructiveHint": False})
     async def unraid_start_container(ctx: Context, container_id: str) -> dict[str, Any]:
         """Start a Docker container by ID.
 
@@ -86,13 +77,10 @@ def register_docker_tools(mcp: FastMCP) -> None:
         Returns:
             Raw GraphQL mutation response payload.
         """
-        try:
-            client = require_readwrite(ctx, "start container")
-            return await client.start_container(container_id)
-        except Exception as e:
-            handle_client_error(e)
+        client = require_readwrite(ctx, "start container")
+        return await client.start_container(container_id)
 
-    @mcp.tool(tags={"write", "docker"}, annotations={"readOnlyHint": False, "destructiveHint": True})
+    @unraid_tool(mcp, tags={"write", "docker"}, annotations={"readOnlyHint": False, "destructiveHint": True})
     async def unraid_stop_container(ctx: Context, container_id: str) -> dict[str, Any]:
         """Stop a Docker container by ID.
 
@@ -103,13 +91,10 @@ def register_docker_tools(mcp: FastMCP) -> None:
         Returns:
             Raw GraphQL mutation response payload.
         """
-        try:
-            client = require_readwrite(ctx, "stop container")
-            return await client.stop_container(container_id)
-        except Exception as e:
-            handle_client_error(e)
+        client = require_readwrite(ctx, "stop container")
+        return await client.stop_container(container_id)
 
-    @mcp.tool(tags={"write", "docker"}, annotations={"readOnlyHint": False, "destructiveHint": False})
+    @unraid_tool(mcp, tags={"write", "docker"}, annotations={"readOnlyHint": False, "destructiveHint": False})
     async def unraid_restart_container(ctx: Context, container_id: str) -> dict[str, Any]:
         """Restart a Docker container by ID.
 
@@ -120,13 +105,10 @@ def register_docker_tools(mcp: FastMCP) -> None:
         Returns:
             Raw GraphQL mutation response payload.
         """
-        try:
-            client = require_readwrite(ctx, "restart container")
-            return await client.restart_container(container_id)
-        except Exception as e:
-            handle_client_error(e)
+        client = require_readwrite(ctx, "restart container")
+        return await client.restart_container(container_id)
 
-    @mcp.tool(tags={"write", "docker"}, annotations={"readOnlyHint": False, "destructiveHint": False})
+    @unraid_tool(mcp, tags={"write", "docker"}, annotations={"readOnlyHint": False, "destructiveHint": False})
     async def unraid_pause_container(ctx: Context, container_id: str) -> dict[str, Any]:
         """Pause a running Docker container.
 
@@ -137,13 +119,10 @@ def register_docker_tools(mcp: FastMCP) -> None:
         Returns:
             Raw GraphQL mutation response payload.
         """
-        try:
-            client = require_readwrite(ctx, "pause container")
-            return await client.pause_container(container_id)
-        except Exception as e:
-            handle_client_error(e)
+        client = require_readwrite(ctx, "pause container")
+        return await client.pause_container(container_id)
 
-    @mcp.tool(tags={"write", "docker"}, annotations={"readOnlyHint": False, "destructiveHint": False})
+    @unraid_tool(mcp, tags={"write", "docker"}, annotations={"readOnlyHint": False, "destructiveHint": False})
     async def unraid_unpause_container(ctx: Context, container_id: str) -> dict[str, Any]:
         """Unpause a paused Docker container.
 
@@ -154,8 +133,5 @@ def register_docker_tools(mcp: FastMCP) -> None:
         Returns:
             Raw GraphQL mutation response payload.
         """
-        try:
-            client = require_readwrite(ctx, "unpause container")
-            return await client.unpause_container(container_id)
-        except Exception as e:
-            handle_client_error(e)
+        client = require_readwrite(ctx, "unpause container")
+        return await client.unpause_container(container_id)

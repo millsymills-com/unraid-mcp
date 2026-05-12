@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- Centralised the per-tool error-handling boilerplate behind a new
+  `unraid_tool` decorator in `tools/_helpers.py`. Every tool in
+  `tools/{system,array,parity,disks,docker,vms,shares,users,notifications}.py`
+  drops its `try: ... except Exception as e: handle_client_error(e)`
+  wrapper and registers via `@unraid_tool(mcp, ...)`. The decorator
+  **narrows the catch to `UnraidError`** so programming bugs
+  (`KeyError`, `AttributeError`, `TypeError`) propagate to FastMCP with
+  a full stacktrace instead of being disguised as "Unexpected error:
+  ..." strings sent to the model. Existing `tags={"write"}` /
+  `annotations={"readOnlyHint": False}` semantics are preserved by
+  forwarding `**tool_kwargs` to `mcp.tool(...)` (#74).
+
 ### Removed
 - PyPI release pipeline (`.github/workflows/release.yml`) and the
   associated `scripts/smoke_install.sh` wheel smoke. The `unraid-mcp`
