@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
+- Retry policy split by operation type in `BaseGraphQLClient._post`.
+  Queries retry on `ConnectError`, `TimeoutException`, and the new
+  `UnraidServerError` (HTTP 5xx). Mutations retry on `ConnectError`
+  only — `TimeoutException` and 5xx no longer duplicate writes whose
+  side effects may already have landed (e.g. `start_array`,
+  `start_parity_check`, `create_user`, every container/VM lifecycle
+  tool). Added `UnraidServerError(UnraidError)` for HTTP 5xx; mapped
+  to a clear "server returned 5xx; often transient" ToolError (#63,
+  #75).
 - Centralised the per-tool error-handling boilerplate behind a new
   `unraid_tool` decorator in `tools/_helpers.py`. Every tool in
   `tools/{system,array,parity,disks,docker,vms,shares,users,notifications}.py`

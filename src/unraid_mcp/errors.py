@@ -34,6 +34,15 @@ class UnraidConnectionError(UnraidError):
     """Connection failure (timeout, DNS, network)."""
 
 
+class UnraidServerError(UnraidError):
+    """Server-side failure (HTTP 5xx).
+
+    Distinct from :class:`UnraidError` so the transport layer can retry
+    these on the query path (idempotent) while leaving mutations alone
+    (the server may have partially processed the request).
+    """
+
+
 class UnraidGraphQLError(UnraidError):
     """GraphQL response contained an ``errors`` array.
 
@@ -93,6 +102,7 @@ _ERROR_TEMPLATES: tuple[tuple[type[UnraidError], str, int], ...] = (
     (UnraidNotFoundError, "Resource not found: {error}", logging.WARNING),
     (UnraidRateLimitError, "Rate limit exceeded: {error}. Try again later.", logging.WARNING),
     (UnraidConnectionError, "Connection failed: {error}. Check host and network.", logging.ERROR),
+    (UnraidServerError, "Unraid server error: {error}. The server returned 5xx; often transient.", logging.WARNING),
     (UnraidReadOnlyError, "Write operation blocked: {error}. Server is in read-only mode.", logging.WARNING),
     (UnraidNotConfiguredError, "Unraid API not configured: {error}. Set UNRAID_API_KEY.", logging.WARNING),
     (
