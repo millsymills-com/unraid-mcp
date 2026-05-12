@@ -18,7 +18,7 @@ from fastmcp.exceptions import ToolError
 from fastmcp.server.lifespan import lifespan as fastmcp_lifespan
 
 from unraid_mcp.config import UnraidConfig
-from unraid_mcp.errors import UnraidNotConfiguredError, UnraidReadOnlyError
+from unraid_mcp.errors import UnraidInitFailedError, UnraidNotConfiguredError, UnraidReadOnlyError
 from unraid_mcp.tools._helpers import require_client, require_readwrite, require_user_mutation
 from unraid_mcp.tools.array import register_array_tools
 
@@ -30,7 +30,11 @@ def _fake_ctx(*, config: UnraidConfig, client: object | None) -> SimpleNamespace
     the lifespan yields (see ``server.make_server_lifespan``), so a
     `SimpleNamespace` with that attribute is enough.
     """
-    return SimpleNamespace(lifespan_context={"config": config, "client": client})
+    return SimpleNamespace(lifespan_context={"config": config, "client": client, "init_error": None})
+
+
+def _fake_ctx_with_init_error(*, config: UnraidConfig, error: Exception) -> SimpleNamespace:
+    return SimpleNamespace(lifespan_context={"config": config, "client": None, "init_error": error})
 
 
 class TestRequireClient:
@@ -40,11 +44,20 @@ class TestRequireClient:
         ctx = _fake_ctx(config=config, client=stub)
         assert require_client(ctx) is stub
 
-    def test_raises_when_client_missing(self):
+    def test_raises_not_configured_when_no_key_and_no_init_error(self):
         config = UnraidConfig(unraid_api_key="k")
         ctx = _fake_ctx(config=config, client=None)
-        with pytest.raises(UnraidNotConfiguredError, match="not set or initial connection failed"):
+        with pytest.raises(UnraidNotConfiguredError, match="UNRAID_API_KEY is not set"):
             require_client(ctx)
+
+    def test_raises_init_failed_when_validate_connection_failed(self):
+        """Init-failure path: a key was provided but startup validation raised — distinct error (#64)."""
+        config = UnraidConfig(unraid_api_key="k")
+        cause = TimeoutError("TLS handshake timed out")
+        ctx = _fake_ctx_with_init_error(config=config, error=cause)
+        with pytest.raises(UnraidInitFailedError, match="TimeoutError: TLS handshake timed out") as exc_info:
+            require_client(ctx)
+        assert exc_info.value.__cause__ is cause
 
 
 class TestRequireReadwrite:

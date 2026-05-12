@@ -32,7 +32,7 @@ def make_server_lifespan(config: UnraidConfig) -> Lifespan:
 
     @lifespan
     async def _server_lifespan(_server: FastMCP) -> AsyncIterator[dict[str, Any]]:  # noqa: PLR0912 — startup flow
-        context: dict[str, Any] = {"config": config, "client": None}
+        context: dict[str, Any] = {"config": config, "client": None, "init_error": None}
 
         # Lazily import the client to avoid circular deps at module load time
         from unraid_mcp.clients.unraid import UnraidClient
@@ -55,11 +55,12 @@ def make_server_lifespan(config: UnraidConfig) -> Lifespan:
             )
             try:
                 await client.validate_connection()
-            except Exception:
+            except Exception as exc:
                 logger.exception(
-                    "Failed to validate Unraid API at %s — tools will return errors",
+                    "Failed to validate Unraid API at %s — tools will return init-failed errors",
                     config.graphql_url,
                 )
+                context["init_error"] = exc
                 await client.close()
             else:
                 context["client"] = client
@@ -100,8 +101,11 @@ def make_server_lifespan(config: UnraidConfig) -> Lifespan:
                 try:
                     await client.close()
                     logger.info("Closed Unraid client")
-                except Exception:
-                    logger.exception("Error closing Unraid client")
+                except Exception as close_exc:
+                    logger.exception(
+                        "Error closing Unraid client (%s)",
+                        type(close_exc).__name__,
+                    )
 
     return _server_lifespan
 

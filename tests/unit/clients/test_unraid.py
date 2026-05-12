@@ -10,7 +10,7 @@ import pytest
 import respx
 
 from unraid_mcp.clients.unraid import UnraidClient
-from unraid_mcp.errors import UnraidConnectionError
+from unraid_mcp.errors import UnraidConnectionError, UnraidError
 from unraid_mcp.models.users import User
 
 GRAPHQL_URL = "https://tower.local:443/graphql"
@@ -36,6 +36,22 @@ class TestGetInfo:
         assert result.os.platform == "linux"
         assert result.cpu is not None
         assert result.cpu.cores == 8
+
+    @respx.mock
+    async def test_get_info_raises_on_missing_top_level_field(self, client):
+        # Regression for #65: drop the silent ``result.get("info", {})`` —
+        # missing key is a schema-drift signal.
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {}}))
+        with pytest.raises(UnraidError, match="Missing 'info'"):
+            await client.get_info()
+
+    @respx.mock
+    async def test_get_info_normalizes_null_to_empty_dict(self, client):
+        # Present-but-null is fine — normalized to ``{}`` so model validation
+        # still works against ``SystemInfo``.
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"info": None}}))
+        result = await client.get_info()
+        assert result.os is None
 
 
 class TestGetArray:
@@ -67,10 +83,29 @@ class TestListContainers:
         assert result[0].names == ["/plex"]
 
     @respx.mock
-    async def test_list_containers_returns_empty_list_on_missing_field(self, client):
+    async def test_list_containers_raises_on_missing_top_level_field(self, client):
+        # Regression for #65: a missing top-level field is a schema-drift
+        # signal — the client must raise instead of silently returning [].
         respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {}}))
+        with pytest.raises(UnraidError, match="Missing 'dockerContainers'"):
+            await client.list_containers()
+
+    @respx.mock
+    async def test_list_containers_normalizes_null_to_empty_list(self, client):
+        # A present-but-null top-level field is allowed by the GraphQL spec
+        # for nullable fields and is normalized to an empty list (#65).
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"dockerContainers": None}}))
         result = await client.list_containers()
         assert result == []
+
+    @respx.mock
+    async def test_list_containers_raises_on_wrong_type(self, client):
+        # Wrong-typed top-level field is also drift. Regression for #65.
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(200, json={"data": {"dockerContainers": {"not": "a list"}}})
+        )
+        with pytest.raises(UnraidError, match="Expected list for 'dockerContainers'"):
+            await client.list_containers()
 
 
 class TestListVms:
@@ -83,6 +118,29 @@ class TestListVms:
         assert result.domain[0].uuid == "u1"
         assert result.domain[0].name == "win11"
         assert result.domain[0].state == "RUNNING"
+
+    @respx.mock
+    async def test_list_vms_raises_on_missing_top_level_field(self, client):
+        # Regression for #65: ``Vms`` is the envelope around the domain
+        # list — missing it means schema drift, not "no VMs".
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {}}))
+        with pytest.raises(UnraidError, match="Missing 'vms'"):
+            await client.list_vms()
+
+
+class TestGetFlash:
+    @respx.mock
+    async def test_get_flash_raises_on_missing_top_level_field(self, client):
+        # Regression for #65: drop ``# type: ignore[no-any-return]`` and the
+        # silent ``result.get("flash", {})`` — raise on drift.
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {}}))
+        with pytest.raises(UnraidError, match="Missing 'flash'"):
+            await client.get_flash()
+
+    @respx.mock
+    async def test_get_flash_normalizes_null_to_empty_dict(self, client):
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"flash": None}}))
+        assert await client.get_flash() == {}
 
 
 class TestStartArray:
