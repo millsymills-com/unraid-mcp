@@ -1,0 +1,76 @@
+name: Schema Probe
+
+# Pre-flight check against a live Unraid GraphQL endpoint. Catches schema
+# drift early (#62) without waiting for a user to hit a broken tool.
+#
+# Required repository secrets (configure under Settings → Secrets and variables
+# → Actions before the first run):
+#   UNRAID_HOST     — hostname or IP of the test Unraid server
+#   UNRAID_API_KEY  — API key from the Unraid WebGUI
+#
+# Optional:
+#   UNRAID_PORT, UNRAID_USE_HTTPS, UNRAID_VERIFY_SSL
+#
+# The workflow exits cleanly when secrets are missing so a fresh clone can
+# install the workflow without a failing required check.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 7 * * *"
+
+concurrency:
+  group: schema-probe
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: GraphQL Schema Probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check for required secrets
+        id: secrets
+        env:
+          UNRAID_HOST: ${{ secrets.UNRAID_HOST }}
+          UNRAID_API_KEY: ${{ secrets.UNRAID_API_KEY }}
+        run: |
+          if [ -z "$UNRAID_HOST" ] || [ -z "$UNRAID_API_KEY" ]; then
+            echo "::notice::UNRAID_HOST / UNRAID_API_KEY secrets not configured — skipping live probe"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.secrets.outputs.configured == 'true'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        if: steps.secrets.outputs.configured == 'true'
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        if: steps.secrets.outputs.configured == 'true'
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        if: steps.secrets.outputs.configured == 'true'
+        run: uv sync
+
+      - name: Run schema-compatibility probe
+        if: steps.secrets.outputs.configured == 'true'
+        env:
+          UNRAID_HOST: ${{ secrets.UNRAID_HOST }}
+          UNRAID_API_KEY: ${{ secrets.UNRAID_API_KEY }}
+          UNRAID_PORT: ${{ secrets.UNRAID_PORT }}
+          UNRAID_USE_HTTPS: ${{ secrets.UNRAID_USE_HTTPS }}
+          UNRAID_VERIFY_SSL: ${{ secrets.UNRAID_VERIFY_SSL }}
+        run: uv run unraid-mcp --check-schema
