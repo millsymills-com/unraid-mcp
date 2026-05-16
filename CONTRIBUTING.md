@@ -59,6 +59,27 @@ uv run bandit -r src/unraid_mcp/ -c pyproject.toml
 - Integration tests live under `tests/integration/` and require a live Unraid server. Mark them with `@pytest.mark.integration`.
 - When adding a tool, add at least one happy-path test and one error-path test. Cover mode gating for any write tool.
 
+## Test Layers
+
+The suite is layered. Each layer catches a distinct class of bugs.
+
+| Command | What runs | Env required |
+|---------|-----------|--------------|
+| `uv run pytest` | unit + property + e2e + non-live contract | none |
+| `uv run pytest -m integration` | live read tools against your tower | `UNRAID_API_KEY`, `UNRAID_HOST` |
+| `UNRAID_ALLOW_LIVE_WRITES=1 uv run pytest -m live_write` | live mutating tests on `mcptest_*` assets | live env + the flag |
+| `uv run pytest -m "contract and requires_live"` | live schema-drift check | `UNRAID_API_KEY` |
+| `uv run python -m tests.contract.refresh` | re-snapshot pinned schema | `UNRAID_API_KEY` |
+
+### Live-write asset setup (one-time)
+
+Live write tests need throwaway assets named with the `mcptest-` prefix:
+
+- A Docker container — Unraid UI → Docker → Add Container, image `nginx:alpine`, name `mcptest-nginx`.
+- A VM — Unraid UI → VMs → Add VM, minimal config, name `mcptest-vm`.
+
+Tests discover them by prefix and skip cleanly if absent. They will start/stop/pause/restart/reboot but never delete these assets.
+
 ## Commits and PRs
 
 - Write commit messages in the Conventional Commits style (`feat:`, `fix:`, `docs:`, `deps:`, `chore:`, etc.).
