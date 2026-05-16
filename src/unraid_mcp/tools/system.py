@@ -28,7 +28,11 @@ def register_system_tools(mcp: FastMCP) -> None:
 
     @unraid_tool(mcp, tags={"system"})
     async def unraid_get_flash(ctx: Context) -> dict[str, Any]:
-        """Get Unraid USB flash drive metadata (GUID, vendor, product).
+        """Get Unraid USB flash drive metadata (vendor, product).
+
+        ``guid`` is intentionally not selected — the Unraid resolver
+        returns null on trial/unregistered installs and trips a non-null
+        violation on the wire (see #52).
 
         Args:
             ctx: FastMCP request context.
