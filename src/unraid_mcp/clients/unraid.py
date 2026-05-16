@@ -213,11 +213,12 @@ query Notifications($type: NotificationType!, $limit: Int!, $offset: Int!) {
 
 # USB flash drive identity.
 # Drift history: #52 — ``Flash.guid`` is non-null on the schema but the
-# resolver returned null on trial/unregistered installs, causing a
-# GraphQL non-null violation rather than a Pydantic-friendly empty
-# result.
+# resolver returns null on trial/unregistered installs, blowing up the
+# whole response with a GraphQL non-null violation. ``guid`` is no
+# longer selected; the field stays in the schema and can be re-added
+# once the upstream resolver is fixed.
 QUERY_FLASH = """
-query Flash { flash { guid vendor product } }
+query Flash { flash { vendor product } }
 """
 
 # License registration state. Stable since 2024.
@@ -494,7 +495,7 @@ SCHEMA_EXPECTATIONS: dict[str, frozenset[str]] = {
             "formattedTimestamp",
         },
     ),
-    "Flash": frozenset({"guid", "vendor", "product"}),
+    "Flash": frozenset({"vendor", "product"}),
     "Connect": frozenset({"id", "dynamicRemoteAccess"}),
     "DynamicRemoteAccessStatus": frozenset({"enabledType", "runningType", "error"}),
     "RemoteAccess": frozenset({"accessType", "forwardType", "port"}),

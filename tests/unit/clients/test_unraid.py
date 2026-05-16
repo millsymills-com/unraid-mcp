@@ -230,6 +230,20 @@ class TestGetFlash:
         respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"flash": None}}))
         assert await client.get_flash() == {}
 
+    @respx.mock
+    async def test_get_flash_query_omits_guid(self, client):
+        # Regression for #52: requesting ``Flash.guid`` triggers a
+        # non-null violation on trial/unregistered Unraid installs.
+        route = respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(200, json={"data": {"flash": {"vendor": "SanDisk", "product": "Cruzer"}}}),
+        )
+        result = await client.get_flash()
+        assert result == {"vendor": "SanDisk", "product": "Cruzer"}
+        sent = json.loads(route.calls[0].request.content)
+        assert "vendor" in sent["query"]
+        assert "product" in sent["query"]
+        assert "guid" not in sent["query"]
+
 
 class TestStartArray:
     @respx.mock
