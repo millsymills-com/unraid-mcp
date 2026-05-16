@@ -20,3 +20,23 @@ async def test_handshake_lists_every_visible_tool(mcp_session_readwrite) -> None
 
     extra = listed_names - expected
     assert not extra, f"unknown tools listed by server: {sorted(extra)}"
+
+
+async def test_read_tool_round_trip(mcp_session_readwrite, mock_graphql_endpoint) -> None:
+    """Calling unraid_get_info returns the structured content from the mock."""
+    mock_graphql_endpoint.expect_request("/graphql", method="POST").respond_with_json(
+        {
+            "data": {
+                "info": {
+                    "os": {"hostname": "mocktower", "platform": "linux", "kernel": "6.0"},
+                    "cpu": {"cores": 4, "threads": 8},
+                    "memory": {"total": 1024, "free": 512},
+                    "versions": {"unraid": "6.12.0"},
+                }
+            }
+        }
+    )
+    result = await mcp_session_readwrite.call_tool("unraid_get_info", {})
+    structured = result.structured_content
+    assert structured is not None
+    assert structured["os"]["hostname"] == "mocktower"
