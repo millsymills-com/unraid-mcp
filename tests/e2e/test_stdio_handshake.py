@@ -73,3 +73,29 @@ async def test_graphql_error_surfaces_as_tool_error(mcp_session_readwrite, mock_
     with pytest.raises(ToolError) as exc:
         await mcp_session_readwrite.call_tool("unraid_get_info", {})
     assert "synthetic" in str(exc.value).lower() or "graphql" in str(exc.value).lower()
+
+
+async def test_lifespan_shuts_down_on_session_close(mock_graphql_endpoint) -> None:
+    """Server starts, advertises capabilities, shuts down cleanly when stdin closes."""
+    import os
+
+    from fastmcp import Client
+    from fastmcp.client.transports import StdioTransport
+
+    transport = StdioTransport(
+        command="uv",
+        args=["run", "unraid-mcp"],
+        env={
+            **os.environ,
+            "UNRAID_HOST": "localhost",
+            "UNRAID_PORT": str(mock_graphql_endpoint.port),
+            "UNRAID_USE_HTTPS": "false",
+            "UNRAID_VERIFY_SSL": "false",
+            "UNRAID_API_KEY": "test-key",
+        },
+    )
+    async with Client(transport) as client:
+        result = await client.list_tools()
+        assert result is not None
+    # If we got here without the `async with` raising, the subprocess
+    # exited cleanly when stdin closed.
