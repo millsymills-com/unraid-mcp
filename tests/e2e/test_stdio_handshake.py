@@ -40,3 +40,23 @@ async def test_read_tool_round_trip(mcp_session_readwrite, mock_graphql_endpoint
     structured = result.structured_content
     assert structured is not None
     assert structured["os"]["hostname"] == "mocktower"
+
+
+async def test_write_tool_visible_in_readwrite(mcp_session_readwrite) -> None:
+    """unraid_start_container is exposed when UNRAID_MODE=readwrite."""
+    tools = await mcp_session_readwrite.list_tools()
+    names = {t.name for t in tools}
+    assert "unraid_start_container" in names
+
+
+async def test_write_tool_hidden_in_readonly(mcp_session_readonly) -> None:
+    """unraid_start_container is NOT exposed when UNRAID_MODE=readonly.
+
+    This is the most security-relevant invariant in the server: a misconfigured
+    server in production must never accidentally expose mutating tools.
+    """
+    tools = await mcp_session_readonly.list_tools()
+    names = {t.name for t in tools}
+    assert "unraid_start_container" not in names
+    assert "unraid_stop_container" not in names
+    assert "unraid_archive_notification" not in names
