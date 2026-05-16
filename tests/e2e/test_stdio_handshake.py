@@ -60,3 +60,16 @@ async def test_write_tool_hidden_in_readonly(mcp_session_readonly) -> None:
     assert "unraid_start_container" not in names
     assert "unraid_stop_container" not in names
     assert "unraid_archive_notification" not in names
+
+
+async def test_graphql_error_surfaces_as_tool_error(mcp_session_readwrite, mock_graphql_endpoint) -> None:
+    """A GraphQL error from the backend surfaces as a ToolError via MCP."""
+    mock_graphql_endpoint.clear_all_handlers()
+    mock_graphql_endpoint.expect_request("/graphql", method="POST").respond_with_json(
+        {"errors": [{"message": "synthetic backend failure", "extensions": {"code": "INTERNAL_SERVER_ERROR"}}]}
+    )
+    from fastmcp.exceptions import ToolError
+
+    with pytest.raises(ToolError) as exc:
+        await mcp_session_readwrite.call_tool("unraid_get_info", {})
+    assert "synthetic" in str(exc.value).lower() or "graphql" in str(exc.value).lower()
