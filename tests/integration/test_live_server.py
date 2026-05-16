@@ -70,11 +70,12 @@ async def test_get_info_returns_real_hostname(live_client):
     assert info.os.hostname, "Unraid server returned an empty hostname"
 
 
-async def test_get_flash_returns_guid(live_client):
-    """Every Unraid server has a flash drive with a GUID."""
+async def test_get_flash_returns_identity(live_client):
+    """Flash drive identity should expose vendor/product (guid dropped per #52)."""
     flash = await live_client.get_flash()
     assert isinstance(flash, dict)
-    assert flash.get("guid"), f"flash.guid missing or empty: {flash}"
+    assert flash.get("vendor"), f"flash.vendor missing or empty: {flash}"
+    assert flash.get("product"), f"flash.product missing or empty: {flash}"
 
 
 async def test_get_registration_returns_state(live_client):

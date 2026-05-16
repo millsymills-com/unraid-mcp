@@ -35,6 +35,6 @@ class TestUnraidGetInfo:
 class TestUnraidGetFlash:
     async def test_happy_path_returns_dict(self, client_rw):
         client, mock = client_rw
-        mock.get_flash.return_value = {"guid": "ABCD", "vendor": "SanDisk", "product": "Cruzer"}
+        mock.get_flash.return_value = {"vendor": "SanDisk", "product": "Cruzer"}
         result = await client.call_tool("unraid_get_flash")
-        assert result.structured_content == {"guid": "ABCD", "vendor": "SanDisk", "product": "Cruzer"}
+        assert result.structured_content == {"vendor": "SanDisk", "product": "Cruzer"}
