@@ -21,8 +21,14 @@ async def _array_state(live_mcp_client) -> dict:
     return res.structured_content
 
 
-async def test_start_pause_resume_cancel_parity_lifecycle(live_mcp_client, request: pytest.FixtureRequest) -> None:
-    """End-to-end parity lifecycle. Single test (not split) so cleanup is atomic."""
+async def test_unraid_start_parity_check_unraid_pause_parity_check_unraid_resume_parity_check_unraid_cancel_parity_check_lifecycle(  # noqa: E501
+    live_mcp_client, request: pytest.FixtureRequest
+) -> None:
+    """End-to-end parity lifecycle. Single test (not split) so cleanup is atomic.
+
+    Function name embeds every tool name exercised so the manifest <-> live-test
+    parity meta-test can match each via substring lookup against collected IDs.
+    """
     initial = await _array_state(live_mcp_client)
     if (initial.get("state") or "").upper() != "STARTED":
         pytest.skip(f"array not STARTED (state={initial.get('state')}); cannot start parity")

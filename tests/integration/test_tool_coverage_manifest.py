@@ -14,8 +14,6 @@ import subprocess
 from collections import Counter
 from pathlib import Path
 
-import pytest
-
 from tests.integration._coverage import TOOLS
 from unraid_mcp.config import UnraidConfig, UnraidMode
 from unraid_mcp.server import create_server
@@ -56,7 +54,6 @@ def test_manifest_unique_names() -> None:
     assert not duplicates, f"Duplicate names in TOOLS: {duplicates}"
 
 
-@pytest.mark.xfail(reason="live tests added in Phases 6-7", strict=False)
 def test_every_manifest_tool_has_a_live_test() -> None:
     """Every covered manifest entry must have at least one collected live test.
 

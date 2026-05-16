@@ -1,4 +1,8 @@
-"""Live mutating tests for notification tools."""
+"""Live mutating tests for notification tools.
+
+Test function names intentionally embed the underlying tool name so the
+manifest <-> live-test parity meta-test can match each tool to a test ID.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +19,7 @@ async def _list_notifications(live_mcp_client) -> list[dict]:
     return raw if isinstance(raw, list) else raw.get("result", [])
 
 
-async def test_archive_notification_removes_from_active_list(live_mcp_client) -> None:
+async def test_unraid_archive_notification_removes_from_active_list(live_mcp_client) -> None:
     """Archive a notification, verify it disappears from the active list."""
     active = await _list_notifications(live_mcp_client)
     if not active:
@@ -33,7 +37,7 @@ async def test_archive_notification_removes_from_active_list(live_mcp_client) ->
     assert nid not in {n["id"] for n in after}
 
 
-async def test_delete_notification_removes_permanently(live_mcp_client) -> None:
+async def test_unraid_delete_notification_removes_permanently(live_mcp_client) -> None:
     """Delete a notification, verify the id is gone from any list."""
     active = await _list_notifications(live_mcp_client)
     if not active:
@@ -47,7 +51,7 @@ async def test_delete_notification_removes_permanently(live_mcp_client) -> None:
     assert nid not in {n["id"] for n in after}
 
 
-async def test_archive_all_notifications_clears_active(live_mcp_client) -> None:
+async def test_unraid_archive_all_notifications_clears_active(live_mcp_client) -> None:
     """archive_all moves every active notification out of the list."""
     active = await _list_notifications(live_mcp_client)
     if not active:
