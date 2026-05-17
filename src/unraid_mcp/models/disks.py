@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unraid_mcp.models.common import UnraidBaseModel
+from unraid_mcp.models.common import BigInt, UnraidBaseModel
 
 
 class Disk(UnraidBaseModel):
@@ -19,7 +19,7 @@ class Disk(UnraidBaseModel):
     device: str | None = None
     type: str | None = None
     vendor: str | None = None
-    size: str | None = None
+    size: BigInt = None
     temperature: float | None = None
     interface_type: str | None = None
     serial_num: str | None = None

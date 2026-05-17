@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unraid_mcp.models.common import UnraidBaseModel
+from unraid_mcp.models.common import BigInt, UnraidBaseModel
 
 
 class CapacityKilobytes(UnraidBaseModel):
@@ -25,15 +25,15 @@ class ArrayDisk(UnraidBaseModel):
     id: str | None = None
     name: str | None = None
     device: str | None = None
-    size: str | None = None
+    size: BigInt = None
     status: str | None = None
     temp: int | None = None
     num_reads: int | None = None
     num_writes: int | None = None
     num_errors: int | None = None
-    fs_size: str | None = None
-    fs_free: str | None = None
-    fs_used: str | None = None
+    fs_size: BigInt = None
+    fs_free: BigInt = None
+    fs_used: BigInt = None
     type: str | None = None
 
 
@@ -52,7 +52,7 @@ class ParityHistoryEntry(UnraidBaseModel):
     """A historical parity check run."""
 
     date: str | None = None
-    duration: str | None = None
+    duration: int | None = None
     speed: str | None = None
     status: str | None = None
     errors: int | None = None

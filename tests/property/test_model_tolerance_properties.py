@@ -37,7 +37,7 @@ _MODEL_FIELDS: list[tuple[type, str, object]] = [
     (Share, "split_level", "2"),
     (User, "name", "root"),
     (User, "description", "admin user"),
-    (User, "roles", "admin"),
+    (User, "roles", ["admin"]),
 ]
 
 
