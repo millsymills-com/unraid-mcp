@@ -12,7 +12,7 @@ class TestUnraidGetParityHistory:
     async def test_returns_list_of_entries(self, client_rw):
         client, mock = client_rw
         mock.get_parity_history.return_value = [
-            ParityHistoryEntry(date="2026-01-01", duration="10h", speed="100 MB/s", errors=0),
+            ParityHistoryEntry(date="2026-01-01", duration=36000, speed="100 MB/s", errors=0),
         ]
         result = await client.call_tool("unraid_get_parity_history")
         assert len(result.structured_content["result"]) == 1

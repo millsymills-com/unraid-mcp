@@ -10,7 +10,7 @@ NotificationType = Literal["UNREAD", "ARCHIVE"]
 """Which notification bin to act on (#61)."""
 
 NotificationImportance = Literal["INFO", "WARNING", "ALERT"]
-"""Server-side importance filter accepted by ``archiveAll`` (#61)."""
+"""Importance filter applied client-side before bulk ``archiveNotifications`` (#61, #176)."""
 
 
 class Notification(UnraidBaseModel):

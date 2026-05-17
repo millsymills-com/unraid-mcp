@@ -199,11 +199,11 @@ class TestGetConnect:
 class TestListVms:
     @respx.mock
     async def test_list_vms_returns_vms_model(self, client):
-        vms = {"domain": [{"uuid": "u1", "name": "win11", "state": "RUNNING"}]}
+        vms = {"domain": [{"id": "u1", "name": "win11", "state": "RUNNING"}]}
         respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"vms": vms}}))
         result = await client.list_vms()
         assert result.domain is not None
-        assert result.domain[0].uuid == "u1"
+        assert result.domain[0].id == "u1"
         assert result.domain[0].name == "win11"
         assert result.domain[0].state == "RUNNING"
 
@@ -461,17 +461,20 @@ class TestVmMutations:
 class TestNotificationMutations:
     @respx.mock
     async def test_archive_notification_passes_prefixed_id(self, client):
-        # Drift #61: ``ID!`` became ``PrefixedID!``; the response selects
-        # ``NotificationOverview`` counters since the legacy ``id`` field
-        # was removed from the overview type.
+        # Drift #61/#176: ``ID!`` became ``PrefixedID!`` and the mutation
+        # now returns the archived ``Notification`` (not the legacy
+        # ``NotificationOverview`` counters).
         route = respx.post(GRAPHQL_URL).mock(
             return_value=httpx.Response(
                 200,
                 json={
                     "data": {
                         "archiveNotification": {
-                            "unread": {"total": 1, "info": 1, "warning": 0, "alert": 0},
-                            "archive": {"total": 5, "info": 3, "warning": 1, "alert": 1},
+                            "id": "n1",
+                            "type": "ARCHIVE",
+                            "title": "test",
+                            "importance": "INFO",
+                            "timestamp": "2026-05-16T12:00:00Z",
                         },
                     },
                 },
@@ -481,7 +484,7 @@ class TestNotificationMutations:
         sent = json.loads(route.calls[0].request.content)
         assert sent["variables"] == {"id": "n1"}
         assert "$id: PrefixedID!" in sent["query"]
-        assert "unread { total info warning alert }" in sent["query"]
+        assert "id type title importance timestamp" in sent["query"]
 
     @respx.mock
     async def test_delete_notification_requires_type_argument(self, client):
@@ -526,46 +529,75 @@ class TestNotificationMutations:
         assert sent["variables"] == {"id": "n1", "type": "ARCHIVE"}
 
     @respx.mock
-    async def test_archive_all_passes_null_importance_by_default(self, client):
-        # Drift #61: ``archiveAll`` accepts an optional
-        # ``importance: NotificationImportance`` filter. ``None`` is sent
-        # so the server archives every active entry.
+    async def test_archive_all_lists_then_bulk_archives(self, client):
+        # Drift #176: ``archiveAll(importance)`` was removed; the
+        # replacement is ``archiveNotifications(ids: [PrefixedID!]!)``.
+        # Importance-filtering moved client-side — the method now lists
+        # unread, applies the filter, and bulk-archives the matched IDs.
+        notifs = [
+            {"id": "n_info", "type": "UNREAD", "title": "info", "importance": "INFO"},
+            {"id": "n_warn", "type": "UNREAD", "title": "warn", "importance": "WARNING"},
+            {"id": "n_alert", "type": "UNREAD", "title": "alert", "importance": "ALERT"},
+        ]
         route = respx.post(GRAPHQL_URL).mock(
-            return_value=httpx.Response(
-                200,
-                json={
-                    "data": {
-                        "archiveAll": {
-                            "unread": {"total": 0, "info": 0, "warning": 0, "alert": 0},
-                            "archive": {"total": 6, "info": 3, "warning": 2, "alert": 1},
+            side_effect=[
+                httpx.Response(200, json={"data": {"notifications": {"id": "wrap", "list": notifs}}}),
+                httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "archiveNotifications": {
+                                "unread": {"total": 0, "info": 0, "warning": 0, "alert": 0},
+                                "archive": {"total": 3, "info": 1, "warning": 1, "alert": 1},
+                            },
                         },
                     },
-                },
-            )
+                ),
+            ]
         )
         await client.archive_all_notifications()
-        sent = json.loads(route.calls[0].request.content)
-        assert sent["variables"] == {"importance": None}
-        assert "$importance: NotificationImportance" in sent["query"]
+        # First call lists unread; second call archives every collected id.
+        list_call = json.loads(route.calls[0].request.content)
+        assert list_call["variables"]["type"] == "UNREAD"
+        archive_call = json.loads(route.calls[1].request.content)
+        assert archive_call["variables"] == {"ids": ["n_info", "n_warn", "n_alert"]}
+        assert "$ids: [PrefixedID!]!" in archive_call["query"]
 
     @respx.mock
-    async def test_archive_all_forwards_importance_filter(self, client):
+    async def test_archive_all_filters_by_importance_client_side(self, client):
+        notifs = [
+            {"id": "n_info", "type": "UNREAD", "title": "info", "importance": "INFO"},
+            {"id": "n_warn", "type": "UNREAD", "title": "warn", "importance": "WARNING"},
+            {"id": "n_alert", "type": "UNREAD", "title": "alert", "importance": "ALERT"},
+        ]
         route = respx.post(GRAPHQL_URL).mock(
-            return_value=httpx.Response(
-                200,
-                json={
-                    "data": {
-                        "archiveAll": {
-                            "unread": {"total": 2, "info": 2, "warning": 0, "alert": 0},
-                            "archive": {"total": 4, "info": 1, "warning": 2, "alert": 1},
+            side_effect=[
+                httpx.Response(200, json={"data": {"notifications": {"id": "wrap", "list": notifs}}}),
+                httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "archiveNotifications": {
+                                "unread": {"total": 2, "info": 1, "warning": 0, "alert": 1},
+                                "archive": {"total": 1, "info": 0, "warning": 1, "alert": 0},
+                            },
                         },
                     },
-                },
-            )
+                ),
+            ]
         )
         await client.archive_all_notifications(importance="WARNING")
-        sent = json.loads(route.calls[0].request.content)
-        assert sent["variables"] == {"importance": "WARNING"}
+        archive_call = json.loads(route.calls[1].request.content)
+        assert archive_call["variables"] == {"ids": ["n_warn"]}
+
+    @respx.mock
+    async def test_archive_all_short_circuits_when_inbox_empty(self, client):
+        # Empty match -> no mutation call, no-op response shape.
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(200, json={"data": {"notifications": {"id": "wrap", "list": []}}}),
+        )
+        result = await client.archive_all_notifications(importance="ALERT")
+        assert result == {"unread": None, "archive": None}
 
 
 class TestNotificationLiteralRoundTrip:
@@ -609,32 +641,23 @@ class TestNotificationLiteralRoundTrip:
     @respx.mock
     @pytest.mark.parametrize("importance", ["INFO", "WARNING", "ALERT"])
     async def test_archive_all_accepts_every_importance(self, client, importance):
-        route = respx.post(GRAPHQL_URL).mock(
-            return_value=httpx.Response(
-                200,
-                json={
-                    "data": {
-                        "archiveAll": {
-                            "unread": {"total": 0, "info": 0, "warning": 0, "alert": 0},
-                            "archive": {"total": 1, "info": 0, "warning": 0, "alert": 0},
-                        },
-                    },
-                },
-            )
+        # Importance is applied client-side post-#176, so an empty list
+        # response shows every literal value is accepted without raising.
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(200, json={"data": {"notifications": {"id": "wrap", "list": []}}}),
         )
-        await client.archive_all_notifications(importance=importance)
-        sent = json.loads(route.calls[0].request.content)
-        assert sent["variables"] == {"importance": importance}
+        result = await client.archive_all_notifications(importance=importance)
+        assert result == {"unread": None, "archive": None}
 
 
 class TestGetMe:
     @respx.mock
     async def test_get_me_returns_user_model(self, client):
-        me = {"id": "u1", "name": "root", "description": "admin", "roles": "admin"}
+        me = {"id": "u1", "name": "root", "description": "admin", "roles": ["ADMIN"]}
         respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"me": me}}))
         result = await client.get_me()
         assert result.name == "root"
-        assert result.roles == "admin"
+        assert result.roles == ["ADMIN"]
 
     @respx.mock
     async def test_get_me_raises_on_missing_top_level_field(self, client):
@@ -667,7 +690,7 @@ class TestGetMe:
         # unsolicited, `User` overrides the base `extra="allow"` to
         # `extra="ignore"` so the field is dropped before it reaches
         # `model_dump()` and the MCP tool response.
-        instance = User.model_validate({"id": "u1", "name": "root", "roles": "admin", "password": "$6$shadow_hash"})
+        instance = User.model_validate({"id": "u1", "name": "root", "roles": ["ADMIN"], "password": "$6$shadow_hash"})
         assert "password" not in instance.model_dump()
         assert not hasattr(instance, "password")
         assert instance.model_extra == {} or instance.model_extra is None
@@ -677,7 +700,7 @@ class TestGetMe:
         # Regression for #132: simulate the Unraid API pushing `password`
         # unsolicited and assert it does not appear in the model_dump of
         # the value `unraid_get_me` returns to FastMCP.
-        me = {"id": "u1", "name": "root", "roles": "admin", "password": "$6$shadow_hash"}
+        me = {"id": "u1", "name": "root", "roles": ["ADMIN"], "password": "$6$shadow_hash"}
         respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"me": me}}))
         result = await client.get_me()
         assert "password" not in result.model_dump()

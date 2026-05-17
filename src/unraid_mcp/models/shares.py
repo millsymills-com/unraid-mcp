@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unraid_mcp.models.common import UnraidBaseModel
+from unraid_mcp.models.common import BigInt, UnraidBaseModel
 
 
 class Share(UnraidBaseModel):
@@ -11,9 +11,9 @@ class Share(UnraidBaseModel):
     name: str | None = None
     name_orig: str | None = None
     comment: str | None = None
-    free: str | None = None
-    size: str | None = None
-    used: str | None = None
+    free: BigInt = None
+    size: BigInt = None
+    used: BigInt = None
     include: list[str] | None = None
     exclude: list[str] | None = None
     cache: str | None = None

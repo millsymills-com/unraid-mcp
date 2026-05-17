@@ -168,7 +168,7 @@ query DockerNetworks {
 QUERY_VMS = """
 query Vms {
     vms {
-        domain { uuid name state }
+        domain { id name state }
     }
 }
 """
@@ -271,7 +271,7 @@ mutation StopArray {
 # Unraid API 4.32+. The grouped fields return a JSON-ish payload (no
 # typed selection set), so the mutation bodies have no inner braces.
 MUTATION_START_PARITY_CHECK = """
-mutation StartParityCheck($correct: Boolean) {
+mutation StartParityCheck($correct: Boolean!) {
     parityCheck { start(correct: $correct) }
 }
 """
@@ -360,24 +360,24 @@ MUTATION_FORCE_STOP_VM = """
 mutation ForceStopVm($id: PrefixedID!) { vm { forceStop(id: $id) } }
 """
 
-# Notification archive/delete/archive-all mutations.
+# Notification archive/delete/bulk-archive mutations.
 # Drift history: #61 — ``ID!`` became ``PrefixedID!``;
-# ``deleteNotification`` gained a required
-# ``type: NotificationType!`` argument so the server knows which
-# counter to decrement; ``archiveAll`` accepts an optional
-# ``importance: NotificationImportance`` filter;
-# ``NotificationOverview.id`` is gone, so return shapes select the
-# updated overview fields instead.
+# ``deleteNotification`` gained a required ``type: NotificationType!``
+# argument so the server knows which counter to decrement.
+# Drift #176 (live_write coverage): ``archiveNotification`` now returns
+# the archived ``Notification`` (not the ``NotificationOverview``);
+# ``archiveAll(importance: ...)`` was removed and its replacement
+# ``archiveNotifications(ids: [PrefixedID!]!)`` takes explicit IDs and
+# returns ``NotificationOverview``.
 MUTATION_ARCHIVE_NOTIFICATION = """
 mutation ArchiveNotification($id: PrefixedID!) {
     archiveNotification(id: $id) {
-        unread { total info warning alert }
-        archive { total info warning alert }
+        id type title importance timestamp
     }
 }
 """
 
-# Notification delete. See MUTATION_ARCHIVE_NOTIFICATION header (#61).
+# Notification delete. See MUTATION_ARCHIVE_NOTIFICATION header.
 MUTATION_DELETE_NOTIFICATION = """
 mutation DeleteNotification($id: PrefixedID!, $type: NotificationType!) {
     deleteNotification(id: $id, type: $type) {
@@ -387,11 +387,11 @@ mutation DeleteNotification($id: PrefixedID!, $type: NotificationType!) {
 }
 """
 
-# Bulk-archive of notifications. See MUTATION_ARCHIVE_NOTIFICATION
-# header (#61).
-MUTATION_ARCHIVE_ALL_NOTIFICATIONS = """
-mutation ArchiveAllNotifications($importance: NotificationImportance) {
-    archiveAll(importance: $importance) {
+# Bulk-archive of notifications by ID. See MUTATION_ARCHIVE_NOTIFICATION
+# header for the schema migration that introduced this shape.
+MUTATION_ARCHIVE_NOTIFICATIONS = """
+mutation ArchiveNotifications($ids: [PrefixedID!]!) {
+    archiveNotifications(ids: $ids) {
         unread { total info warning alert }
         archive { total info warning alert }
     }
@@ -434,7 +434,7 @@ SCHEMA_EXPECTATIONS: dict[str, frozenset[str]] = {
             "parityCheck",
             "archiveNotification",
             "deleteNotification",
-            "archiveAll",
+            "archiveNotifications",
             "docker",
             "vm",
         },
@@ -478,7 +478,7 @@ SCHEMA_EXPECTATIONS: dict[str, frozenset[str]] = {
         {"id", "name", "driver", "scope", "created", "internal", "attachable", "ingress", "enableIPv6"},
     ),
     "Vms": frozenset({"domain"}),
-    "VmDomain": frozenset({"uuid", "name", "state"}),
+    "VmDomain": frozenset({"id", "name", "state"}),
     "Notifications": frozenset({"id", "list"}),
     "NotificationOverview": frozenset({"unread", "archive"}),
     "NotificationCounts": frozenset({"total", "info", "warning", "alert"}),
@@ -514,7 +514,7 @@ query Introspect {
     __schema {
         queryType { name }
         mutationType { name }
-        types { name fields { name } inputFields { name } }
+        types { name fields(includeDeprecated: true) { name } inputFields { name } }
     }
 }
 """
@@ -962,15 +962,31 @@ class UnraidClient(BaseGraphQLClient):
         )
 
     async def archive_all_notifications(self, importance: NotificationImportance | None = None) -> dict[str, Any]:
-        """Archive all notifications.
+        """Archive all unread notifications (optionally filtered by importance).
+
+        Schema migration #176: ``archiveAll(importance: ...)`` was
+        removed in Unraid API 4.32+ in favour of
+        ``archiveNotifications(ids: [PrefixedID!]!)``. Importance-filter
+        semantics are preserved client-side — list unread notifications,
+        filter by importance if requested, then bulk-archive by ID.
 
         Args:
             importance: Optional ``NotificationImportance`` filter —
                 limits the bulk archive to entries at that importance
                 (``INFO`` / ``WARNING`` / ``ALERT``). Omit to archive
                 every active notification.
+
+        Returns:
+            ``NotificationOverview`` payload after the bulk archive, or
+            ``{"unread": None, "archive": None}`` when nothing matched.
         """
-        return await self.mutate(MUTATION_ARCHIVE_ALL_NOTIFICATIONS, variables={"importance": importance})
+        notifs = await self.list_notifications(notification_type="UNREAD", limit=1000, offset=0)
+        if importance is not None:
+            notifs = [n for n in notifs if n.importance == importance]
+        ids = [n.id for n in notifs if n.id is not None]
+        if not ids:
+            return {"unread": None, "archive": None}
+        return await self.mutate(MUTATION_ARCHIVE_NOTIFICATIONS, variables={"ids": ids})
 
     # ── Lifecycle ───────────────────────────────────────────────────────
 

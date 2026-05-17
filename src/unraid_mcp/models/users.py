@@ -28,4 +28,4 @@ class User(UnraidBaseModel):
     id: str | None = None
     name: str | None = None
     description: str | None = None
-    roles: str | None = None
+    roles: list[str] | None = None

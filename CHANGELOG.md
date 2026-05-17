@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Layered test suite: `tests/property/` (Hypothesis fuzzing on parsers,
+  config, and error mapping), `tests/e2e/` (MCP stdio transport tests
+  with mocked GraphQL endpoint), `tests/contract/` (GraphQL schema
+  snapshot pinning + drift detection), and `tests/live_write/` (gated
+  mutating tests on `mcptest_*` assets).
+- Per-tool live-coverage manifest in `tests/integration/_coverage.py`
+  with meta-tests that enforce every registered MCP tool has a live
+  test.
+- Three-layer write gating for live mutating tests: `pytest -m
+  live_write` marker + `UNRAID_ALLOW_LIVE_WRITES=1` env flag +
+  `mcptest_*` asset name invariant. Pre-flight banner with 3-second
+  abort window.
+- Branch coverage gate raised from 80% to 90%.
+
 ### Changed
 - `unraid_get_container` and `unraid_get_disk` now issue direct
   single-entity GraphQL queries (`Docker.container(id: PrefixedID!)` and

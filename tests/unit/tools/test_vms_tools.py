@@ -11,7 +11,7 @@ from unraid_mcp.models.vms import VmDomain, Vms
 class TestListVms:
     async def test_returns_vms_with_domains(self, client_rw):
         client, mock = client_rw
-        mock.list_vms.return_value = Vms(domain=[VmDomain(uuid="u1", name="win11", state="RUNNING")])
+        mock.list_vms.return_value = Vms(domain=[VmDomain(id="u1", name="win11", state="RUNNING")])
         result = await client.call_tool("unraid_list_vms")
         assert result.structured_content["domain"][0]["name"] == "win11"
 

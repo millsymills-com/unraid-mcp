@@ -36,7 +36,13 @@ def _require_env() -> tuple[str, str, bool]:
 
 
 @pytest.fixture
-async def live_client():
+async def live_client(live_env: None):
+    """Build a real ``UnraidClient`` against the live tower.
+
+    Depends on ``live_env`` so ``tests/conftest.py``'s autouse
+    ``_isolate_unraid_env`` doesn't strip the credentials before
+    ``_require_env`` reads them.
+    """
     host, api_key, use_https = _require_env()
     scheme = "https" if use_https else "http"
     client = UnraidClient(
