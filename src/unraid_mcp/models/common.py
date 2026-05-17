@@ -17,7 +17,7 @@ def _coerce_bigint(value: object) -> object:
     here and let the rest of the model declare ``BigInt`` once.
     """
     if isinstance(value, bool):
-        return value
+        return None
     if isinstance(value, int):
         return str(value)
     return value

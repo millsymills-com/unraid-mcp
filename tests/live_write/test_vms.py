@@ -23,7 +23,7 @@ async def _vm_state(live_mcp_client, vm_id: str) -> str:
     res = await live_mcp_client.call_tool("unraid_list_vms", {})
     payload = res.structured_content or {}
     for d in payload.get("domain") or []:
-        if d.get("uuid") == vm_id or d.get("name") == vm_id:
+        if d.get("id") == vm_id:
             return d.get("state", "")
     return "missing"
 
@@ -31,7 +31,7 @@ async def _vm_state(live_mcp_client, vm_id: str) -> str:
 async def test_unraid_start_vm_then_unraid_stop_vm(live_mcp_client, mcptest_vm, request: pytest.FixtureRequest) -> None:
     """Start an mcptest VM, verify state, stop it, verify."""
     _assert_mcptest(mcptest_vm["name"])
-    vm_id = mcptest_vm.get("uuid") or mcptest_vm["name"]
+    vm_id = mcptest_vm["id"]
 
     def _stop() -> None:
         with contextlib.suppress(Exception):
@@ -59,7 +59,7 @@ async def test_unraid_pause_vm_then_unraid_resume_vm(
 ) -> None:
     """Pause + resume a running mcptest VM."""
     _assert_mcptest(mcptest_vm["name"])
-    vm_id = mcptest_vm.get("uuid") or mcptest_vm["name"]
+    vm_id = mcptest_vm["id"]
 
     if (await _vm_state(live_mcp_client, vm_id)).lower() not in {"running", "started"}:
         pytest.skip(f"VM not running; can't pause (state={await _vm_state(live_mcp_client, vm_id)})")
@@ -88,7 +88,7 @@ async def test_unraid_pause_vm_then_unraid_resume_vm(
 async def test_unraid_reboot_vm(live_mcp_client, mcptest_vm) -> None:
     """Reboot returns the VM to running state."""
     _assert_mcptest(mcptest_vm["name"])
-    vm_id = mcptest_vm.get("uuid") or mcptest_vm["name"]
+    vm_id = mcptest_vm["id"]
 
     if (await _vm_state(live_mcp_client, vm_id)).lower() not in {"running", "started"}:
         pytest.skip("VM not running; can't reboot")

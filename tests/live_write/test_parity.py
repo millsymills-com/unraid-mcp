@@ -60,8 +60,14 @@ async def test_unraid_start_parity_check_unraid_pause_parity_check_unraid_resume
     await live_mcp_client.call_tool("unraid_pause_parity_check", {})
     await live_mcp_client.call_tool("unraid_resume_parity_check", {})
     await live_mcp_client.call_tool("unraid_cancel_parity_check", {})
+
+    def _parity_idle(state: dict) -> bool:
+        parity = state.get("parity") or {}
+        running = parity.get("running") or parity.get("active") or parity.get("inProgress")
+        return not bool(running)
+
     await wait_for_state(
         lambda: _array_state(live_mcp_client),
-        predicate=lambda _s: True,
-        timeout=5.0,
+        predicate=_parity_idle,
+        timeout=30.0,
     )
