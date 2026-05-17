@@ -9,12 +9,9 @@ manifest <-> live-test parity meta-test can match each tool to a test ID.
 
 from __future__ import annotations
 
-import asyncio
-import contextlib
-
 import pytest
 
-from tests.live_write.conftest import _assert_mcptest, wait_for_state
+from tests.live_write.conftest import _assert_mcptest, run_cleanup, wait_for_state
 
 pytestmark = pytest.mark.live_write
 
@@ -32,13 +29,11 @@ async def _stop_start_cycle(live_mcp_client, mcptest_container, request: pytest.
     initial = await _container_state(live_mcp_client, cid)
 
     def _restore() -> None:
-        with contextlib.suppress(Exception):
-            asyncio.run(
-                live_mcp_client.call_tool(
-                    "unraid_start_container" if initial == "running" else "unraid_stop_container",
-                    {"container_id": cid},
-                )
-            )
+        tool = "unraid_start_container" if initial == "running" else "unraid_stop_container"
+        run_cleanup(
+            f"{tool}({cid}) restore for {name}",
+            lambda: live_mcp_client.call_tool(tool, {"container_id": cid}),
+        )
 
     request.addfinalizer(_restore)
 
@@ -73,8 +68,10 @@ async def _pause_unpause_cycle(live_mcp_client, mcptest_container, request: pyte
         pytest.skip(f"{name} is not running; can't pause")
 
     def _unpause() -> None:
-        with contextlib.suppress(Exception):
-            asyncio.run(live_mcp_client.call_tool("unraid_unpause_container", {"container_id": cid}))
+        run_cleanup(
+            f"unraid_unpause_container({cid}) for {name}",
+            lambda: live_mcp_client.call_tool("unraid_unpause_container", {"container_id": cid}),
+        )
 
     request.addfinalizer(_unpause)
 

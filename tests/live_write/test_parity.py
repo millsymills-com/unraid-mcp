@@ -6,13 +6,10 @@ to avoid leaving a parity check running on the live array.
 
 from __future__ import annotations
 
-import asyncio
-import contextlib
-
 import pytest
 from fastmcp import Client
 
-from tests.live_write.conftest import wait_for_state
+from tests.live_write.conftest import run_cleanup, wait_for_state
 from unraid_mcp.config import UnraidConfig, UnraidMode
 from unraid_mcp.server import create_server
 
@@ -48,11 +45,9 @@ async def test_unraid_start_parity_check_unraid_pause_parity_check_unraid_resume
             cfg = UnraidConfig(unraid_mode=UnraidMode.READWRITE)
             server = create_server(cfg)
             async with Client(server) as fresh:
-                with contextlib.suppress(Exception):
-                    await fresh.call_tool("unraid_cancel_parity_check", {})
+                await fresh.call_tool("unraid_cancel_parity_check", {})
 
-        with contextlib.suppress(Exception):
-            asyncio.run(_do_cancel())
+        run_cleanup("safety-net unraid_cancel_parity_check", _do_cancel)
 
     request.addfinalizer(_sync_cancel)
 

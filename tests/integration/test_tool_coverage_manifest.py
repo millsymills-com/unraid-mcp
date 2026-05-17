@@ -10,7 +10,7 @@ stays in lockstep with the tools actually registered by
 from __future__ import annotations
 
 import asyncio
-import subprocess
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -54,39 +54,39 @@ def test_manifest_unique_names() -> None:
     assert not duplicates, f"Duplicate names in TOOLS: {duplicates}"
 
 
-def test_every_manifest_tool_has_a_live_test() -> None:
-    """Every covered manifest entry must have at least one collected live test.
+_CALL_TOOL_RE = re.compile(r"""call_tool\(\s*['"](?P<name>unraid_[a-zA-Z0-9_]+)['"]""")
 
-    Collects test IDs from ``tests/integration`` (and ``tests/live_write`` when
-    present) and asserts that each manifest entry whose ``marker`` is not
-    ``None`` is mentioned by at least one collected test ID. Entries with
-    ``marker=None`` are intentionally skipped (disruptive/out-of-scope tools).
+
+def _tools_invoked_in_test_files() -> set[str]:
+    """Return the set of tool names actually invoked via ``call_tool`` in test files.
+
+    Earlier versions of this test used substring-matching against pytest's
+    ``--collect-only`` output, which could false-match a logging test against
+    an unrelated tool name (e.g., ``test_logging_unraid_start_container_*``
+    would falsely cover ``unraid_start_container``). Walking the test source
+    and matching the literal ``call_tool("unraid_…",`` invocation is precise:
+    a manifest tool counts as covered only when it is actually called (#180).
     """
     repo_root = Path(__file__).resolve().parents[2]
-    test_paths = [str(repo_root / "tests" / "integration")]
-    live_write_dir = repo_root / "tests" / "live_write"
-    if live_write_dir.is_dir():
-        test_paths.append(str(live_write_dir))
+    test_dirs = [repo_root / "tests" / "integration", repo_root / "tests" / "live_write"]
+    invoked: set[str] = set()
+    for test_dir in test_dirs:
+        if not test_dir.is_dir():
+            continue
+        for path in test_dir.rglob("*.py"):
+            invoked.update(match.group("name") for match in _CALL_TOOL_RE.finditer(path.read_text(encoding="utf-8")))
+    return invoked
 
-    argv = [
-        "uv",
-        "run",
-        "pytest",
-        "--collect-only",
-        "-q",
-        "--no-header",
-        "-o",
-        "addopts=",
-        *test_paths,
-    ]
-    result = subprocess.run(
-        argv,
-        check=False,
-        capture_output=True,
-        text=True,
-        cwd=repo_root,
+
+def test_every_manifest_tool_has_a_live_test() -> None:
+    """Every covered manifest entry must be invoked by at least one test file.
+
+    Matches each tool name to a literal ``call_tool("unraid_…", …)`` invocation
+    in ``tests/integration/`` or ``tests/live_write/``. Entries with
+    ``marker=None`` are intentionally skipped (disruptive/out-of-scope tools).
+    """
+    invoked = _tools_invoked_in_test_files()
+    missing = sorted(tool.name for tool in TOOLS if tool.marker is not None and tool.name not in invoked)
+    assert not missing, (
+        f'Manifest tools with no `call_tool("…", …)` invocation in tests/integration or tests/live_write: {missing}'
     )
-    collected_ids = result.stdout
-
-    missing = [tool.name for tool in TOOLS if tool.marker is not None and tool.name not in collected_ids]
-    assert not missing, f"Manifest tools with no collected live test: {sorted(missing)}"
