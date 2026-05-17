@@ -13,6 +13,34 @@ if TYPE_CHECKING:
 _UNRAID_ENV_PREFIX = "UNRAID_"
 
 
+def load_unraid_env_into_os_environ() -> None:
+    """Load ``UNRAID_*`` keys from ``.env`` files into ``os.environ``.
+
+    Precedence ``shell > project .env > global .env`` — matches what
+    pydantic-settings would compute in production. Idempotent. Used by
+    session-scoped fixtures that need env vars before the function-scoped
+    :func:`_isolate_unraid_env` autouse strips them, since ``monkeypatch``
+    (and therefore :func:`live_env`) is function-scoped and can't be
+    requested from a session fixture.
+    """
+    from pathlib import Path
+
+    from dotenv import dotenv_values
+
+    loaded: dict[str, str] = {}
+    for envfile in (Path.home() / "Desktop/Projects/.env", Path(".env")):
+        if envfile.exists():
+            loaded.update(
+                {
+                    key: value
+                    for key, value in dotenv_values(envfile).items()
+                    if key and key.startswith(_UNRAID_ENV_PREFIX) and value is not None
+                }
+            )  # later files (project) override earlier (global)
+    for key, value in loaded.items():
+        os.environ.setdefault(key, value)  # but never override shell exports
+
+
 @pytest.fixture(autouse=True)
 def _isolate_unraid_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Strip every `UNRAID_*` env var for the duration of one test.

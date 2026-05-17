@@ -10,8 +10,11 @@ import asyncio
 import contextlib
 
 import pytest
+from fastmcp import Client
 
 from tests.live_write.conftest import wait_for_state
+from unraid_mcp.config import UnraidConfig, UnraidMode
+from unraid_mcp.server import create_server
 
 pytestmark = pytest.mark.live_write
 
@@ -33,13 +36,23 @@ async def test_unraid_start_parity_check_unraid_pause_parity_check_unraid_resume
     if (initial.get("state") or "").upper() != "STARTED":
         pytest.skip(f"array not STARTED (state={initial.get('state')}); cannot start parity")
 
-    async def _cancel() -> None:
-        with contextlib.suppress(Exception):
-            await live_mcp_client.call_tool("unraid_cancel_parity_check", {})
-
     def _sync_cancel() -> None:
+        """Safety-net cancel via a fresh client + fresh loop.
+
+        We don't reuse ``live_mcp_client`` here because finalizers run
+        after the test's event loop is torn down — sharing the bound
+        httpx async client across loops hangs on close-wait sockets.
+        """
+
+        async def _do_cancel() -> None:
+            cfg = UnraidConfig(unraid_mode=UnraidMode.READWRITE)
+            server = create_server(cfg)
+            async with Client(server) as fresh:
+                with contextlib.suppress(Exception):
+                    await fresh.call_tool("unraid_cancel_parity_check", {})
+
         with contextlib.suppress(Exception):
-            asyncio.run(_cancel())
+            asyncio.run(_do_cancel())
 
     request.addfinalizer(_sync_cancel)
 

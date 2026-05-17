@@ -22,7 +22,7 @@ from unraid_mcp.config import UnraidConfig, UnraidMode
 from unraid_mcp.server import create_server
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Awaitable, Callable
+    from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 
 log = logging.getLogger(__name__)
 
@@ -39,8 +39,17 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _writes_enabled(live_env: None) -> None:
-    """Hard gate: skip the entire live_write directory unless explicitly enabled."""
+def _writes_enabled() -> None:
+    """Hard gate: skip the entire live_write directory unless explicitly enabled.
+
+    Loads ``.env`` directly rather than depending on the function-scoped
+    :func:`tests.conftest.live_env` fixture so the session-scoped
+    :func:`live_mcp_client` can construct ``UnraidConfig`` with env vars
+    visible before the per-test :func:`_isolate_unraid_env` autouse runs.
+    """
+    from tests.conftest import load_unraid_env_into_os_environ
+
+    load_unraid_env_into_os_environ()
     if os.environ.get("UNRAID_ALLOW_LIVE_WRITES") != "1":
         pytest.skip(
             "tests/live_write/ is gated. Set UNRAID_ALLOW_LIVE_WRITES=1 to enable "
@@ -68,9 +77,17 @@ def _pre_flight_banner(_writes_enabled: None) -> None:
     time.sleep(3)
 
 
-@pytest.fixture(scope="session")
-async def live_mcp_client() -> AsyncIterator[Client]:
-    """Live FastMCP in-memory client in readwrite mode."""
+@pytest.fixture
+async def live_mcp_client(live_env: None) -> AsyncIterator[Client]:
+    """Live FastMCP in-memory client in readwrite mode.
+
+    Function-scoped: session-scoped async fixtures with the default
+    function-scoped test loop deadlock when nested under autouse session
+    fixtures (the orphan-scan dependency chain). Per-test FastMCP startup
+    against the live tower is ~100 ms, so the overhead is negligible.
+    Depends on ``live_env`` so the autouse ``_isolate_unraid_env`` strip
+    doesn't leave ``UnraidConfig`` with an empty API key.
+    """
     cfg = UnraidConfig(unraid_mode=UnraidMode.READWRITE)
     server = create_server(cfg)
     async with Client(server) as client:
@@ -141,20 +158,36 @@ async def wait_for_state[T](
 
 
 @pytest.fixture(scope="session", autouse=True)
-async def _orphan_scan(live_mcp_client: Client) -> AsyncIterator[None]:
-    """At session end, list any leftover mcptest_* notifications and warn."""
+def _orphan_scan() -> Iterator[None]:
+    """At session end, list any leftover mcptest_* notifications and warn.
+
+    Sync fixture wrapping an ``asyncio.run`` teardown so the orphan
+    scan stays session-scoped without crossing pytest-asyncio's
+    session-vs-function loop boundary.
+    """
+
+    async def _run_scan() -> None:
+        try:
+            cfg = UnraidConfig(unraid_mode=UnraidMode.READWRITE)
+            server = create_server(cfg)
+            async with Client(server) as scan_client:
+                notifs = (await scan_client.call_tool("unraid_list_notifications", {})).structured_content
+        except Exception:
+            log.warning("orphan scan failed — check your tower manually for mcptest_* assets")
+            return
+
+        if not isinstance(notifs, list):
+            return
+        notif_orphans = [
+            n for n in notifs if isinstance(n, dict) and str(n.get("title", "")).lower().startswith(_MCPTEST_PREFIX)
+        ]
+
+        if notif_orphans:
+            msg_lines = ["\n" + "=" * 72, "ORPHAN mcptest_* ASSETS DETECTED — clean up manually:"]
+            msg_lines.extend(f"  notification: {n.get('title')} (id={n.get('id')})" for n in notif_orphans)
+            msg_lines.append("=" * 72 + "\n")
+            sys.stderr.write("\n".join(msg_lines))
+            sys.stderr.flush()
+
     yield
-    try:
-        notifs = (await live_mcp_client.call_tool("unraid_list_notifications", {})).structured_content
-    except Exception:
-        log.warning("orphan scan failed — check your tower manually for mcptest_* assets")
-        return
-
-    notif_orphans = [n for n in (notifs or []) if str(n.get("title", "")).lower().startswith(_MCPTEST_PREFIX)]
-
-    if notif_orphans:
-        msg_lines = ["\n" + "=" * 72, "ORPHAN mcptest_* ASSETS DETECTED — clean up manually:"]
-        msg_lines.extend(f"  notification: {n.get('title')} (id={n.get('id')})" for n in notif_orphans)
-        msg_lines.append("=" * 72 + "\n")
-        sys.stderr.write("\n".join(msg_lines))
-        sys.stderr.flush()
+    asyncio.run(_run_scan())
