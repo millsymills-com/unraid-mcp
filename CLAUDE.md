@@ -131,3 +131,17 @@ Run the audit:
 cd ~/Desktop/Projects/consistency-check
 uv run consistency-check audit --repo $(basename "$PWD")
 ```
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues via `gh` CLI (repo inferred from `git remote -v`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical names — `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. Categories: `bug`, `enhancement`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout: `CONTEXT.md` + `docs/adr/` at repo root (created lazily by `/grill-with-docs`). See `docs/agents/domain.md`.
