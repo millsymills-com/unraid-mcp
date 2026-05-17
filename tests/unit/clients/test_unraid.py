@@ -457,6 +457,26 @@ class TestVmMutations:
         sent = json.loads(route.calls[0].request.content)
         assert "forceStop(id: $id)" in sent["query"]
 
+    @respx.mock
+    async def test_vm_mutate_raises_when_action_field_missing(self, client):
+        # Drift #181: a missing action field used to be silently coerced to ok=False,
+        # masking schema drift as a routine refusal.
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"vm": {}}}))
+        with pytest.raises(UnraidError, match=r"missing vm\.start"):
+            await client.start_vm("u1")
+
+    @respx.mock
+    async def test_vm_mutate_raises_when_vm_block_missing(self, client):
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"vm": None}}))
+        with pytest.raises(UnraidError, match=r"missing vm\.stop"):
+            await client.stop_vm("u1")
+
+    @respx.mock
+    async def test_vm_mutate_raises_on_non_bool_payload(self, client):
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"vm": {"pause": "yes"}}}))
+        with pytest.raises(UnraidError, match=r"non-bool result"):
+            await client.pause_vm("u1")
+
 
 class TestNotificationMutations:
     @respx.mock

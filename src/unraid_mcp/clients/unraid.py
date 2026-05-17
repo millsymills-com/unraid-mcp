@@ -907,11 +907,25 @@ class UnraidClient(BaseGraphQLClient):
         flattens the response to ``{"ok": bool, "id": vm_id}`` — there's
         no domain object to return and callers still need to know which
         VM they acted on.
+
+        Raises ``UnraidError`` when the payload is missing the expected
+        ``vm.<action>`` field or returns a non-bool (#181): coercing such
+        cases to ``ok=False`` would mask schema drift as a routine refusal.
         """
         result = await self.mutate(mutation, variables={"id": vm_id})
         vm_block = result.get("vm") if isinstance(result, dict) else None
-        ok = vm_block.get(action) if isinstance(vm_block, dict) else None
-        return {"ok": bool(ok), "id": vm_id}
+        if not isinstance(vm_block, dict) or action not in vm_block:
+            raise UnraidError(
+                f"VM mutation '{action}' for {vm_id!r} returned unexpected payload "
+                f"(missing vm.{action}): {result!r}. Schema may have changed; run "
+                "`uv run unraid-mcp --check-schema`.",
+            )
+        ok = vm_block[action]
+        if not isinstance(ok, bool):
+            raise UnraidError(
+                f"VM mutation '{action}' for {vm_id!r} returned non-bool result {ok!r}; expected Boolean!.",
+            )
+        return {"ok": ok, "id": vm_id}
 
     async def start_vm(self, vm_id: str) -> dict[str, Any]:
         """Start a VM by UUID."""

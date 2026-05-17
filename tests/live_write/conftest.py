@@ -13,6 +13,7 @@ import logging
 import os
 import sys
 import time
+import traceback
 from typing import TYPE_CHECKING
 
 import pytest
@@ -27,6 +28,34 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 _MCPTEST_PREFIX = "mcptest"
+
+
+def run_cleanup(label: str, coro_factory: Callable[[], Awaitable[object]]) -> None:
+    """Run a cleanup coroutine and surface failures loudly (#177).
+
+    Test finalizers used to wrap cleanup in ``contextlib.suppress(Exception)``,
+    leaving ``mcptest_*`` assets in the wrong state on the live tower with
+    zero operator signal. Cleanup is still best-effort (a raise here would
+    cascade into subsequent teardown), but a failure now writes a banner to
+    stderr and logs the traceback so it's impossible to miss.
+    """
+    try:
+        asyncio.run(coro_factory())
+    except Exception as exc:
+        log.exception("live-write cleanup failed: %s", label)
+        banner = (
+            "\n" + "=" * 72 + "\n"
+            f"CLEANUP FAILED — manual recovery may be required: {label}\n"
+            f"  {type(exc).__name__}: {exc}\n"
+            "  check the live tower for leftover mcptest_* assets\n"
+            + "=" * 72
+            + "\n"
+            + traceback.format_exc()
+            + "=" * 72
+            + "\n"
+        )
+        sys.stderr.write(banner)
+        sys.stderr.flush()
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
@@ -172,8 +201,21 @@ def _orphan_scan() -> Iterator[None]:
             server = create_server(cfg)
             async with Client(server) as scan_client:
                 notifs = (await scan_client.call_tool("unraid_list_notifications", {})).structured_content
-        except Exception:
-            log.warning("orphan scan failed — check your tower manually for mcptest_* assets")
+        except Exception as exc:
+            log.exception("orphan scan failed")
+            banner = (
+                "\n" + "=" * 72 + "\n"
+                "ORPHAN SCAN FAILED — could not enumerate mcptest_* assets on the live tower.\n"
+                f"  {type(exc).__name__}: {exc}\n"
+                "  Manually inspect the WebGUI for leftover mcptest_* containers, VMs, and notifications.\n"
+                + "=" * 72
+                + "\n"
+                + traceback.format_exc()
+                + "=" * 72
+                + "\n"
+            )
+            sys.stderr.write(banner)
+            sys.stderr.flush()
             return
 
         if not isinstance(notifs, list):
