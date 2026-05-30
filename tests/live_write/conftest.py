@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import sys
 import time
 import traceback
@@ -19,6 +18,9 @@ from typing import TYPE_CHECKING
 import pytest
 from fastmcp import Client
 
+from tests.live_write._gates import MCPTEST_PREFIX as _MCPTEST_PREFIX
+from tests.live_write._gates import assert_mcptest as _assert_mcptest
+from tests.live_write._gates import require_writes_enabled
 from unraid_mcp.config import UnraidConfig, UnraidMode
 from unraid_mcp.server import create_server
 
@@ -26,8 +28,6 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 
 log = logging.getLogger(__name__)
-
-_MCPTEST_PREFIX = "mcptest"
 
 
 def run_cleanup(label: str, coro_factory: Callable[[], Awaitable[object]]) -> None:
@@ -69,23 +69,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 
 @pytest.fixture(scope="session", autouse=True)
 def _writes_enabled() -> None:
-    """Hard gate: skip the entire live_write directory unless explicitly enabled.
-
-    Loads ``.env`` directly rather than depending on the function-scoped
-    :func:`tests.conftest.live_env` fixture so the session-scoped
-    :func:`live_mcp_client` can construct ``UnraidConfig`` with env vars
-    visible before the per-test :func:`_isolate_unraid_env` autouse runs.
-    """
-    from tests.conftest import load_unraid_env_into_os_environ
-
-    load_unraid_env_into_os_environ()
-    if os.environ.get("UNRAID_ALLOW_LIVE_WRITES") != "1":
-        pytest.skip(
-            "tests/live_write/ is gated. Set UNRAID_ALLOW_LIVE_WRITES=1 to enable "
-            "(writes against your live Unraid server using mcptest_* assets)."
-        )
-    if not os.environ.get("UNRAID_API_KEY"):
-        pytest.skip("set UNRAID_API_KEY to run live_write tests")
+    """Hard gate: skip the entire live_write directory unless explicitly enabled."""
+    require_writes_enabled()
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -121,12 +106,6 @@ async def live_mcp_client(live_env: None) -> AsyncIterator[Client]:
     server = create_server(cfg)
     async with Client(server) as client:
         yield client
-
-
-def _assert_mcptest(name: str | None) -> None:
-    """Hard guard — never operate on a non-mcptest asset."""
-    if not name or not str(name).lower().startswith(_MCPTEST_PREFIX):
-        raise RuntimeError(f"refusing to mutate asset {name!r} — name must start with {_MCPTEST_PREFIX!r} for safety")
 
 
 @pytest.fixture
