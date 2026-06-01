@@ -1,4 +1,4 @@
-"""Pure, fixture-free guards for the live-write safety gate.
+"""Fixture-free guards for the live-write safety gate.
 
 Kept separate from ``conftest.py`` so offline unit tests can import and exercise
 the gate logic without importing the conftest module — importing the conftest
@@ -16,7 +16,7 @@ MCPTEST_PREFIX = "mcptest"
 
 def assert_mcptest(name: str | None) -> None:
     """Hard guard — never operate on a non-``mcptest`` asset."""
-    if not name or not str(name).lower().startswith(MCPTEST_PREFIX):
+    if not name or not name.lower().startswith(MCPTEST_PREFIX):
         raise RuntimeError(f"refusing to mutate asset {name!r} — name must start with {MCPTEST_PREFIX!r} for safety")
 
 
