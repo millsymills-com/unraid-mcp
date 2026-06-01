@@ -18,7 +18,21 @@ updates:
         patterns:
           - "pytest*"
           - "ruff"
-          - "mypy"
+          - "ty"
+          - "bandit*"
+          - "respx"
+          - "pre-commit"
+          - "hypothesis"
+        update-types:
+          - "minor"
+          - "patch"
+      production-dependencies:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "pytest*"
+          - "ruff"
+          - "ty"
           - "bandit*"
           - "respx"
           - "pre-commit"
