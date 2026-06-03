@@ -71,8 +71,10 @@ class TestCheckConfig:
         assert "UnraidAuthError" in captured.err
         mock_client.close.assert_awaited_once()
 
-    async def test_api_key_never_appears_in_output(self, monkeypatch, capsys):
-        # Regression lock: confirm no path ever echoes the full key.
+    async def test_unexpected_error_emits_type_without_message(self, monkeypatch, capsys):
+        # The unexpected branch is the one preflight path not covered by length-only
+        # redaction, so it must emit the exception class name and never its message —
+        # a transport error could embed the API key in the message body.
         secret = "SUPER-SECRET-API-KEY-abc123xyz456"
         monkeypatch.setenv("UNRAID_API_KEY", secret)
         mock_client = AsyncMock()
@@ -81,8 +83,7 @@ class TestCheckConfig:
             result = await _check_config()
         assert result == 2
         captured = capsys.readouterr()
-        # The unexpected-error branch does echo the exception message — that's a
-        # known surface but the point is the *config* print never leaks the key.
-        # So we check the part of output before "Validating connection…".
-        pre_validation = captured.err.split("Validating connection")[0]
-        assert secret not in pre_validation
+        assert "FAIL — unexpected RuntimeError" in captured.err
+        assert secret not in captured.err
+        assert "echoed" not in captured.err
+        mock_client.close.assert_awaited_once()

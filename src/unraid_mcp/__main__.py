@@ -104,8 +104,8 @@ async def _check_config() -> int:
     except UnraidError as exc:
         _emit(f"  FAIL — {type(exc).__name__}: {exc}")
         return 2
-    except Exception as exc:  # defensive: unexpected non-typed failure
-        _emit(f"  FAIL — unexpected {type(exc).__name__}: {exc}")
+    except Exception as exc:  # defensive: unexpected failure; omit message — could embed the API key
+        _emit(f"  FAIL — unexpected {type(exc).__name__}")
         return 2
     else:
         _emit("  OK — server responded to validation query.")
