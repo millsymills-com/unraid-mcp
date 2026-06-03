@@ -32,12 +32,12 @@ def _redact_api_key(key: SecretStr | str | None) -> str:
 
 
 async def _check_schema() -> int:
-    """Introspect the live schema and print drift report.
+    """Introspect the live schema and emit a drift report to stderr.
 
     Exit codes:
         0 — schema matches client expectations
         1 — no API key configured
-        2 — drift detected (details printed) or connection failure
+        2 — drift detected (details emitted to stderr) or connection failure
     """
     config = UnraidConfig()
     if not config.api_enabled:
@@ -72,7 +72,7 @@ async def _check_schema() -> int:
 
 
 async def _check_config() -> int:
-    """Print effective config and validate connectivity. Returns exit code."""
+    """Emit effective config to stderr and validate connectivity. Returns exit code."""
     config = UnraidConfig()
 
     _emit("unraid-mcp configuration check")
