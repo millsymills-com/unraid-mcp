@@ -5,13 +5,13 @@ Thanks for your interest in improving `unraid-mcp`. This document covers the dev
 ## Development Setup
 
 ```bash
-git clone https://github.com/millsmillsymills/unraid-mcp.git
+git clone https://github.com/millsymills-com/unraid-mcp.git
 cd unraid-mcp
 uv sync --extra dev
 uv run pre-commit install
 ```
 
-Copy `.env.example` to `.env` and fill in the host and API key for your Unraid server. The server still starts when the key is unset — tool calls then fail with a clear "API not configured" message.
+Copy `.env.example` to `.env` and fill in the host and API key for your Unraid server. The server still starts when the key is unset; tool calls then fail with a clear "API not configured" message.
 
 ## Workflow
 
@@ -41,7 +41,7 @@ uv run bandit -r src/unraid_mcp/ -c pyproject.toml
 
 - **Python >=3.13**, strict `ty`, `ruff` for lint and format.
 - **Line length**: 120 characters.
-- **No print statements** — use the `logging` module (enforced by ruff T20).
+- **No print statements**: use the `logging` module (enforced by ruff T20).
 - **Models** use `extra="allow"` to tolerate unknown fields from the Unraid API.
 - **Client** uses `httpx.AsyncClient` with `tenacity`-based retry.
 - **Errors** propagate as typed `UnraidError` subclasses; tool layer maps them to `ToolError`.
@@ -75,8 +75,8 @@ The suite is layered. Each layer catches a distinct class of bugs.
 
 Live write tests need throwaway assets named with the `mcptest-` prefix:
 
-- A Docker container — Unraid UI → Docker → Add Container, image `nginx:alpine`, name `mcptest-nginx`.
-- A VM — Unraid UI → VMs → Add VM, minimal config, name `mcptest-vm`.
+- A Docker container: Unraid UI → Docker → Add Container, image `nginx:alpine`, name `mcptest-nginx`.
+- A VM: Unraid UI → VMs → Add VM, minimal config, name `mcptest-vm`.
 
 Tests discover them by prefix and skip cleanly if absent. They will start/stop/pause/restart/reboot but never delete these assets.
 

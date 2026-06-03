@@ -9,7 +9,7 @@ description = "Production-grade Python MCP server for the Unraid GraphQL API"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.13"
-authors = [{ name = "millsmillsymills" }]
+authors = [{ name = "millsymills-com" }]
 keywords = ["unraid", "mcp", "model-context-protocol", "nas", "home-automation"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -49,9 +49,9 @@ dev = [
 unraid-mcp = "unraid_mcp.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/millsmillsymills/unraid-mcp"
-Repository = "https://github.com/millsmillsymills/unraid-mcp"
-Issues = "https://github.com/millsmillsymills/unraid-mcp/issues"
+Homepage = "https://github.com/millsymills-com/unraid-mcp"
+Repository = "https://github.com/millsymills-com/unraid-mcp"
+Issues = "https://github.com/millsymills-com/unraid-mcp/issues"
 
 # =============================================================================
 # Ruff — linting and formatting
