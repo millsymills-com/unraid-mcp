@@ -16,6 +16,11 @@ from unraid_mcp.logging_config import configure_logging
 from unraid_mcp.server import create_server
 
 
+def _emit(message: str) -> None:
+    """Write preflight output to stderr; stdout is reserved for stdio JSON-RPC framing."""
+    print(message, file=sys.stderr)
+
+
 def _redact_api_key(key: SecretStr | str | None) -> str:
     if key is None:
         return "<not set>"
@@ -37,7 +42,7 @@ async def _check_schema() -> int:
     """
     config = UnraidConfig()
     if not config.api_enabled:
-        print("No API key configured — set UNRAID_API_KEY to run the schema check.")
+        _emit("No API key configured — set UNRAID_API_KEY to run the schema check.")
         return 1
 
     api_key = config.unraid_api_key
@@ -54,14 +59,14 @@ async def _check_schema() -> int:
         try:
             drifts = await client.check_schema_compatibility()
         except UnraidError as exc:
-            print(f"Schema check failed: {type(exc).__name__}: {exc}")
+            _emit(f"Schema check failed: {type(exc).__name__}: {exc}")
             return 2
         if not drifts:
-            print(f"Schema compatibility check passed against {config.graphql_url}")
+            _emit(f"Schema compatibility check passed against {config.graphql_url}")
             return 0
-        print(f"Detected {len(drifts)} schema-drift issue(s):")
+        _emit(f"Detected {len(drifts)} schema-drift issue(s):")
         for drift in drifts:
-            print(f"  • {drift}")
+            _emit(f"  • {drift}")
         return 2
     finally:
         await client.close()
@@ -71,20 +76,20 @@ async def _check_config() -> int:
     """Print effective config and validate connectivity. Returns exit code."""
     config = UnraidConfig()
 
-    print("unraid-mcp configuration check")
-    print(f"  version:         {__version__}")
-    print(f"  mode:            {config.unraid_mode.value}")
-    print(f"  endpoint:        {config.graphql_url}")
-    print(f"  api key:         {_redact_api_key(config.unraid_api_key)}")
-    print(f"  verify TLS:      {config.unraid_verify_ssl}")
-    print(f"  request timeout: {config.unraid_request_timeout}s")
-    print(f"  max retries:     {config.unraid_max_retries}")
+    _emit("unraid-mcp configuration check")
+    _emit(f"  version:         {__version__}")
+    _emit(f"  mode:            {config.unraid_mode.value}")
+    _emit(f"  endpoint:        {config.graphql_url}")
+    _emit(f"  api key:         {_redact_api_key(config.unraid_api_key)}")
+    _emit(f"  verify TLS:      {config.unraid_verify_ssl}")
+    _emit(f"  request timeout: {config.unraid_request_timeout}s")
+    _emit(f"  max retries:     {config.unraid_max_retries}")
 
     if not config.api_enabled:
-        print("\nNo API key configured — set UNRAID_API_KEY to run the connectivity check.")
+        _emit("\nNo API key configured — set UNRAID_API_KEY to run the connectivity check.")
         return 1
 
-    print("\nValidating connection…")
+    _emit("\nValidating connection…")
     api_key = config.unraid_api_key
     if api_key is None:  # api_enabled gated this above, kept for type-narrowing
         return 1
@@ -98,13 +103,13 @@ async def _check_config() -> int:
     try:
         await client.validate_connection()
     except UnraidError as exc:
-        print(f"  FAIL — {type(exc).__name__}: {exc}")
+        _emit(f"  FAIL — {type(exc).__name__}: {exc}")
         return 2
     except Exception as exc:  # defensive: unexpected non-typed failure
-        print(f"  FAIL — unexpected {type(exc).__name__}: {exc}")
+        _emit(f"  FAIL — unexpected {type(exc).__name__}: {exc}")
         return 2
     else:
-        print("  OK — server responded to validation query.")
+        _emit("  OK — server responded to validation query.")
         return 0
     finally:
         await client.close()

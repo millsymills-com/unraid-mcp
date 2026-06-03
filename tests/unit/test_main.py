@@ -28,7 +28,8 @@ class TestCheckConfig:
         result = await _check_config()
         assert result == 1
         captured = capsys.readouterr()
-        assert "No API key configured" in captured.out
+        assert "No API key configured" in captured.err
+        assert captured.out == ""
 
     async def test_success_exits_zero(self, monkeypatch, capsys):
         monkeypatch.setenv("UNRAID_API_KEY", "verylongsecretkey-not-shown")
@@ -38,10 +39,11 @@ class TestCheckConfig:
             result = await _check_config()
         assert result == 0
         captured = capsys.readouterr()
-        assert "OK" in captured.out
+        assert captured.out == ""  # stdout reserved for stdio JSON-RPC
+        assert "OK" in captured.err
         # API key must be redacted in the output
-        assert "verylongsecretkey-not-shown" not in captured.out
-        assert "very" in captured.out  # prefix visible
+        assert "verylongsecretkey-not-shown" not in captured.err
+        assert "very" in captured.err  # prefix visible
         mock_client.close.assert_awaited_once()
 
     async def test_validation_failure_exits_two(self, monkeypatch, capsys):
@@ -52,9 +54,9 @@ class TestCheckConfig:
             result = await _check_config()
         assert result == 2
         captured = capsys.readouterr()
-        assert "FAIL" in captured.out
-        assert "UnraidConnectionError" in captured.out
-        assert "refused" in captured.out
+        assert "FAIL" in captured.err
+        assert "UnraidConnectionError" in captured.err
+        assert "refused" in captured.err
         mock_client.close.assert_awaited_once()
 
     async def test_auth_failure_also_exits_two(self, monkeypatch, capsys):
@@ -65,7 +67,7 @@ class TestCheckConfig:
             result = await _check_config()
         assert result == 2
         captured = capsys.readouterr()
-        assert "UnraidAuthError" in captured.out
+        assert "UnraidAuthError" in captured.err
         mock_client.close.assert_awaited_once()
 
     async def test_api_key_never_appears_in_output(self, monkeypatch, capsys):
@@ -81,5 +83,5 @@ class TestCheckConfig:
         # The unexpected-error branch does echo the exception message — that's a
         # known surface but the point is the *config* print never leaks the key.
         # So we check the part of output before "Validating connection…".
-        pre_validation = captured.out.split("Validating connection")[0]
+        pre_validation = captured.err.split("Validating connection")[0]
         assert secret not in pre_validation
