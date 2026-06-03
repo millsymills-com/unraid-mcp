@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+- CI now runs `pip-audit` on every push and PR as a required `audit`
+  job, catching advisories the Dependabot database can lag on. Lifted
+  the transitive `pyjwt` (>=2.13.0) and `starlette` (>=1.0.1) floors to
+  patched versions to clear PYSEC-2026-161/175/177/178/179 (#198).
+
 ### Added
 - Layered test suite: `tests/property/` (Hypothesis fuzzing on parsers,
   config, and error mapping), `tests/e2e/` (MCP stdio transport tests
