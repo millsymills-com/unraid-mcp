@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
-from unraid_mcp.__main__ import _check_config, _redact_api_key, _scrub_api_key
+from unraid_mcp.__main__ import _check_config, _redact_api_key, _safe_error_text
 from unraid_mcp.errors import UnraidAuthError, UnraidConnectionError
 
 
@@ -23,22 +23,22 @@ class TestRedactApiKey:
         assert "yz" not in redacted
 
 
-class TestScrubApiKey:
+class TestSafeErrorText:
     def test_none_key_returns_message_unchanged(self):
-        assert _scrub_api_key("connection to host failed", None) == "connection to host failed"
+        assert _safe_error_text("connection to host failed", None) == "connection to host failed"
 
     def test_empty_key_returns_message_unchanged(self):
-        assert _scrub_api_key("connection to host failed", "") == "connection to host failed"
+        assert _safe_error_text("connection to host failed", "") == "connection to host failed"
 
-    def test_replaces_key_occurrences_with_placeholder(self):
+    def test_withholds_message_containing_key(self):
         secret = "SUPER-SECRET-abc123"
         message = f"x-api-key: {secret} rejected by https://host/graphql?key={secret}"
-        scrubbed = _scrub_api_key(message, secret)
-        assert secret not in scrubbed
-        assert scrubbed.count("<redacted>") == 2
+        safe = _safe_error_text(message, secret)
+        assert secret not in safe
+        assert safe == "<withheld: error text contained the API key>"
 
-    def test_leaves_non_secret_content_intact(self):
-        assert _scrub_api_key("Connection refused", "k" * 20) == "Connection refused"
+    def test_keeps_message_without_key(self):
+        assert _safe_error_text("Connection refused", "k" * 20) == "Connection refused"
 
 
 class TestCheckConfig:
@@ -89,10 +89,10 @@ class TestCheckConfig:
         assert "UnraidAuthError" in captured.err
         mock_client.close.assert_awaited_once()
 
-    async def test_typed_error_scrubs_key_from_wrapped_message(self, monkeypatch, capsys):
+    async def test_typed_error_withholds_message_containing_key(self, monkeypatch, capsys):
         # The typed UnraidError branch echoes the wrapped client exception. httpx could
-        # embed the key (header dump, URL) in that string, so the known value must be
-        # scrubbed even though the rest of the message is kept for debugging.
+        # embed the key (header dump, URL) in that string, so when the known value
+        # appears the whole message is withheld — the class name still identifies it.
         secret = "SUPER-SECRET-API-KEY-abc123xyz456"
         monkeypatch.setenv("UNRAID_API_KEY", secret)
         mock_client = AsyncMock()
@@ -104,9 +104,8 @@ class TestCheckConfig:
         assert result == 2
         captured = capsys.readouterr()
         assert "UnraidConnectionError" in captured.err
-        assert "connection refused" in captured.err  # non-secret context preserved
         assert secret not in captured.err
-        assert "<redacted>" in captured.err
+        assert "withheld" in captured.err
         mock_client.close.assert_awaited_once()
 
     async def test_unexpected_error_emits_type_without_message(self, monkeypatch, capsys):
