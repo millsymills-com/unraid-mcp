@@ -72,6 +72,8 @@ gh workflow disable "Schema Probe"
 
 ## Operational notes
 
+Three things to settle before pointing a client at the server:
+
 - **Read-only by default.** `UNRAID_MODE` defaults to `readonly`; write tools (start/stop/restart, parity controls) are hidden until you set `UNRAID_MODE=readwrite`. The mode is also re-checked at call time, so a forgotten env var can't quietly expose writes.
 - **TLS verification on by default.** `UNRAID_VERIFY_SSL=true`. Set it to `false` only on trusted networks with self-signed certs; a forged cert can intercept your API key and proxy mutations through your client.
 - **GraphQL must be enabled in Unraid.** The endpoint at `/graphql` is gated behind **Settings → Management Access → Developer Options** in the Unraid WebGUI; enable it once per server before the MCP client connects.
