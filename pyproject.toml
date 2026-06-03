@@ -115,7 +115,7 @@ ignore = [
     "TC001",   # application imports needed at runtime for FastMCP annotation introspection
     "TC002",   # third-party imports needed at runtime for FastMCP annotation introspection
 ]
-# CLI entry point writes to stdout for --check-config; print is the right tool there
+# CLI entry point emits preflight diagnostics to stderr via _emit(); print is the right tool there
 "src/unraid_mcp/__main__.py" = [
     "T201",    # print is intentional for CLI user-facing output
 ]
