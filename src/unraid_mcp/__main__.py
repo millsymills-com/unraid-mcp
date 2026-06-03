@@ -31,6 +31,24 @@ def _redact_api_key(key: SecretStr | str | None) -> str:
     return f"<set, {len(raw)} chars>"
 
 
+def _safe_error_text(message: str, key: SecretStr | str | None) -> str:
+    """Return the error message, or withhold it entirely if it contains the API key.
+
+    Typed-error preflight branches echo a wrapped client exception. A wrapped httpx
+    error could embed the key (header dump, URL), so withhold the whole message when
+    the known value appears rather than trust the library not to leak it. The secret
+    is only ever used in a membership test, never interpolated into the result.
+    """
+    if key is None:
+        return message
+    raw = key.get_secret_value() if isinstance(key, SecretStr) else key
+    if not raw:
+        return message
+    if raw in message:
+        return "<withheld: error text contained the API key>"
+    return message
+
+
 async def _check_schema() -> int:
     """Introspect the live schema and emit a drift report to stderr.
 
@@ -58,7 +76,7 @@ async def _check_schema() -> int:
         try:
             drifts = await client.check_schema_compatibility()
         except UnraidError as exc:
-            _emit(f"Schema check failed: {type(exc).__name__}: {exc}")
+            _emit(f"Schema check failed: {type(exc).__name__}: {_safe_error_text(str(exc), api_key)}")
             return 2
         if not drifts:
             _emit(f"Schema compatibility check passed against {config.graphql_url}")
@@ -102,7 +120,7 @@ async def _check_config() -> int:
     try:
         await client.validate_connection()
     except UnraidError as exc:
-        _emit(f"  FAIL — {type(exc).__name__}: {exc}")
+        _emit(f"  FAIL — {type(exc).__name__}: {_safe_error_text(str(exc), api_key)}")
         return 2
     except Exception as exc:  # defensive: unexpected failure; omit message — could embed the API key
         _emit(f"  FAIL — unexpected {type(exc).__name__}")
