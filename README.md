@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/logo-8bit.png" alt="unraid-mcp" width="480">
+  <img src="docs/assets/logo.svg" alt="unraid-mcp" width="200">
 </p>
 
 # unraid-mcp
