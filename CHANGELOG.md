@@ -196,7 +196,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   associated `scripts/smoke_install.sh` wheel smoke. The `unraid-mcp`
   name on PyPI is owned by an unrelated project; this fork is
   distributed source-only via this GitHub repo. Install via
-  `uv pip install git+https://github.com/millsmillsymills/unraid-mcp.git`
+  `uv pip install git+https://github.com/millsymills-com/unraid-mcp.git`
   or build the Docker image locally.
 
 ### Added
