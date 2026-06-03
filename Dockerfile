@@ -5,7 +5,7 @@
 #     docker run -i --rm \
 #         -e UNRAID_HOST=tower.local \
 #         -e UNRAID_API_KEY=your-key \
-#         ghcr.io/millsmillsymills/unraid-mcp:latest
+#         ghcr.io/millsymills-com/unraid-mcp:latest
 #
 # The `-i` (keep stdin open) flag is required — MCP clients attach to
 # stdin/stdout. Use `--rm` so each client connection starts fresh.

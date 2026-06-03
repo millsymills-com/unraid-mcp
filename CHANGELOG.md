@@ -36,14 +36,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `GRAPHQL_VALIDATION_FAILED` and falls back to list-then-filter so the
   tool surface stays identical. The Unraid schema does not expose a
   singular `share` query, so `unraid_get_share` keeps the list-and-scan
-  path — encapsulated on the client now for symmetry. New
+  path, encapsulated on the client now for symmetry. New
   `UnraidClient.get_container`, `get_disk`, `get_share` methods own the
   lookup logic; the corresponding `list_*` methods are unchanged (#36).
+
+### Fixed
+- Corrected the GitHub org in documented clone, install, and
+  security-reporting URLs and in packaging metadata from
+  `millsmillsymills` to `millsymills-com`, matching the actual remote
+  (#203).
 
 ### Added
 - `unraid_get_me` read tool, backed by the new `Query.me` selection set
   (`{ id name description roles }`). Returns the single `UserAccount`
-  matching the API key in use — the only account coverage left after
+  matching the API key in use, the only account coverage left after
   Unraid 7.2+ removed `Query.users` from the GraphQL API (#57).
 - README subsection documenting the nightly `--check-schema` CI probe,
   the Actions secrets required to enable it on a fork (`UNRAID_HOST`
@@ -92,7 +98,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     domain object to surface (#60).
   - Notification write mutations: `$id` is `PrefixedID!`.
     `deleteNotification` gained a required `type: NotificationType!`
-    argument so the server knows which bin's counter to decrement —
+    argument so the server knows which bin's counter to decrement;
     `unraid_delete_notification` takes a new `notification_type`
     parameter (default `UNREAD`). `archiveAll` accepts an optional
     `importance: NotificationImportance` filter exposed on
@@ -132,11 +138,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - `unraid_list_containers` / `unraid_get_container`: top-level
     `Query.dockerContainers` removed in favor of `docker.containers`;
     `DockerContainer.networkMode` removed (#55).
-  - `unraid_list_docker_networks`: same regrouping as #55 —
+  - `unraid_list_docker_networks`: same regrouping as #55,
     `Query.dockerNetworks` → `docker.networks`. `enableIPv6` added
     (#56).
   - `unraid_list_notifications`: `Notifications.list(filter:
-    NotificationFilter)` — `type` is required, so the tool takes a
+    NotificationFilter)`: `type` is required, so the tool takes a
     `notification_type` parameter (`UNREAD` default, `ARCHIVE`
     opt-in) plus `limit` / `offset` pagination (#58).
 
@@ -173,7 +179,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Retry policy split by operation type in `BaseGraphQLClient._post`.
   Queries retry on `ConnectError`, `TimeoutException`, and the new
   `UnraidServerError` (HTTP 5xx). Mutations retry on `ConnectError`
-  only — `TimeoutException` and 5xx no longer duplicate writes whose
+  only; `TimeoutException` and 5xx no longer duplicate writes whose
   side effects may already have landed (e.g. `start_array`,
   `start_parity_check`, `create_user`, every container/VM lifecycle
   tool). Added `UnraidServerError(UnraidError)` for HTTP 5xx; mapped
@@ -196,7 +202,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   associated `scripts/smoke_install.sh` wheel smoke. The `unraid-mcp`
   name on PyPI is owned by an unrelated project; this fork is
   distributed source-only via this GitHub repo. Install via
-  `uv pip install git+https://github.com/millsmillsymills/unraid-mcp.git`
+  `uv pip install git+https://github.com/millsymills-com/unraid-mcp.git`
   or build the Docker image locally.
 
 ### Added
@@ -217,7 +223,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `make_server_lifespan(config)` factory so the lifespan is bound to the
   caller's `UnraidConfig`; `create_server(config)` is now the single source
   of truth for both mode gating and client construction (#21).
-- End-to-end tool-layer tests via `fastmcp.Client` in-memory session — 51 new
+- End-to-end tool-layer tests via `fastmcp.Client` in-memory session: 51 new
   tests across all domains, covering happy path, readonly-mode invisibility,
   not-found lookups, auth errors, and unconfigured-API surfaces (#11).
 - Integration test scaffolding in `tests/integration/test_live_server.py`
@@ -248,7 +254,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `--check-config`. Catches packaging/entry-point regressions that
   `uv run pytest` against the source tree can't see (#42).
 - Per-domain integration smokes in `tests/integration/test_live_server.py`
-  (13 total, up from 2) — one read tool per domain with invariants
+  (13 total, up from 2): one read tool per domain with invariants
   like `bridge` Docker network and `root` user. Opt-in via
   `UNRAID_API_KEY` and the `integration` marker; default `pytest`
   run still skips them all (#43).
@@ -307,7 +313,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Wheel smoke (`scripts/smoke_install.sh`) covers build + install +
   CLI invocation.
 
-## [0.1.0] — 2026-04-18
+## [0.1.0] - 2026-04-18
 
 Initial scaffold. Production-grade FastMCP server for the Unraid GraphQL API,
 with 38 tools across system, array, parity, disks, docker, VMs, shares,
