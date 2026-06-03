@@ -3,7 +3,7 @@
 ## Reporting a Vulnerability
 
 Please report security vulnerabilities privately via GitHub's
-[private vulnerability reporting](https://github.com/millsmillsymills/unraid-mcp/security/advisories/new)
+[private vulnerability reporting](https://github.com/millsymills-com/unraid-mcp/security/advisories/new)
 feature. Do **not** open a public issue.
 
 You should receive an acknowledgement within 7 days. After triage, a fix
@@ -19,8 +19,8 @@ In scope:
 
 Out of scope (report upstream instead):
 
-- Vulnerabilities in the Unraid GraphQL API itself — report to Lime Technology.
-- Vulnerabilities in dependencies — report to the upstream project.
+- Vulnerabilities in the Unraid GraphQL API itself: report to Lime Technology.
+- Vulnerabilities in dependencies: report to the upstream project.
 
 ## Operational guidance
 
@@ -34,6 +34,6 @@ the array. To minimise blast radius:
   and rotate it via the Unraid WebGUI if it was ever exposed.
 - Leave `UNRAID_VERIFY_SSL` at its default of `true`. Override to `false`
   only when your Unraid server uses a self-signed cert AND you accept the
-  MITM risk on that network segment — disabling verification lets any
+  MITM risk on that network segment; disabling verification lets any
   attacker on the network path capture the `x-api-key` header and any
   in-flight credentials.

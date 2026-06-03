@@ -8,14 +8,14 @@ Production-grade Python MCP server for the Unraid GraphQL API.
 
 ## Status
 
-**Under active development** — see [CLAUDE.md](CLAUDE.md) for the architectural overview.
+**Alpha**, v0.1.0. Stage: S3 (complete: full tool surface with live integration tests, distributed source-only). See [CLAUDE.md](CLAUDE.md) for the architectural overview.
 
 ## Features
 
-- **MCP tools** covering Unraid system info, array, disks, Docker, VMs, shares, the authenticated user account, notifications, and parity checks
-- **Read/write mode separation** — write tools invisible in readonly mode (`mcp.disable(tags={"write"})`) with runtime defense-in-depth
-- **Single-endpoint GraphQL client** — `httpx` async client over the Unraid `/graphql` endpoint with `tenacity` retry and typed error mapping
-- **Typed, linted, tested** — strict ty, ruff, pytest with CI on Python 3.13
+- **MCP tools** covering Unraid system info (including flash drive, registration, and Unraid Connect status), array, disks, Docker, VMs, shares, the authenticated user account, notifications, and parity checks
+- **Read/write mode separation**: write tools invisible in readonly mode (`mcp.disable(tags={"write"})`) with runtime defense-in-depth
+- **Single-endpoint GraphQL client**: `httpx` async client over the Unraid `/graphql` endpoint with `tenacity` retry and typed error mapping
+- **Typed, linted, tested**: strict ty, ruff, pytest with CI on Python 3.13
 
 ### Removed in this release
 
@@ -25,12 +25,12 @@ Unraid 7.2+ removed `Query.users`, `addUser`, and `deleteUser` from the GraphQL 
 
 ```bash
 # Install from source
-git clone https://github.com/millsmillsymills/unraid-mcp.git
+git clone https://github.com/millsymills-com/unraid-mcp.git
 cd unraid-mcp
 uv sync
 
 # Or, install directly from git into another project's venv
-uv pip install git+https://github.com/millsmillsymills/unraid-mcp.git
+uv pip install git+https://github.com/millsymills-com/unraid-mcp.git
 
 # Configure
 cp .env.example .env
@@ -42,9 +42,9 @@ unraid-mcp
 
 Generate an API key in the Unraid WebGUI under **Settings → Management Access → API Keys**, or from a terminal on the server with `unraid-api apikey --create`. Enable the GraphQL API the first time via **Settings → Management Access → Developer Options**.
 
-Once configured, run `unraid-mcp --check-config` to verify connectivity before attaching an MCP client — it prints the resolved config (with the API key redacted), runs a single validation query, and exits 0 / 1 / 2 (ok / no key / validation failed).
+Once configured, run `unraid-mcp --check-config` to verify connectivity before attaching an MCP client; it prints the resolved config (with the API key redacted), runs a single validation query, and exits 0 / 1 / 2 (ok / no key / validation failed).
 
-Before re-deploying against a new Unraid release, run `unraid-mcp --check-schema` to pre-flight upgrade compatibility — it introspects the live GraphQL schema and reports any drift from what this client expects to query. Exit codes are `0` (schema compatible), `1` (no API key configured), and `2` (drift detected or connection failure). Sample drift output:
+Before re-deploying against a new Unraid release, run `unraid-mcp --check-schema` to pre-flight upgrade compatibility; it introspects the live GraphQL schema and reports any drift from what this client expects to query. Exit codes are `0` (schema compatible), `1` (no API key configured), and `2` (drift detected or connection failure). Sample drift output:
 
 ```
 Detected 2 schema-drift issue(s):
@@ -57,11 +57,11 @@ Detected 2 schema-drift issue(s):
 The [`.github/workflows/schema-probe.yml`](.github/workflows/schema-probe.yml) workflow runs `unraid-mcp --check-schema` nightly (`0 7 * * *` UTC) against a live Unraid server held in repository secrets. CI tracks against the latest Unraid stable release. Forks that want the probe to run must set two Actions secrets (with three optional overrides):
 
 ```
-UNRAID_HOST            # required — hostname or IP of a reachable test server
-UNRAID_API_KEY         # required — API key on that server
-UNRAID_PORT            # optional — overrides the default port
-UNRAID_USE_HTTPS       # optional — "true" / "false"
-UNRAID_VERIFY_SSL      # optional — "true" / "false", leave default unless using a self-signed cert
+UNRAID_HOST            # required: hostname or IP of a reachable test server
+UNRAID_API_KEY         # required: API key on that server
+UNRAID_PORT            # optional: overrides the default port
+UNRAID_USE_HTTPS       # optional: "true" / "false"
+UNRAID_VERIFY_SSL      # optional: "true" / "false", leave default unless using a self-signed cert
 ```
 
 The probe step is skipped automatically when the two required secrets are absent, so forks that don't have a test server see no failures. To opt out entirely, disable the workflow on your fork:
@@ -73,7 +73,7 @@ gh workflow disable "Schema Probe"
 ## Operational notes
 
 - **Read-only by default.** `UNRAID_MODE` defaults to `readonly`; write tools (start/stop/restart, parity controls) are hidden until you set `UNRAID_MODE=readwrite`. The mode is also re-checked at call time, so a forgotten env var can't quietly expose writes.
-- **TLS verification on by default.** `UNRAID_VERIFY_SSL=true`. Set it to `false` only on trusted networks with self-signed certs — a forged cert can intercept your API key and proxy mutations through your client.
+- **TLS verification on by default.** `UNRAID_VERIFY_SSL=true`. Set it to `false` only on trusted networks with self-signed certs; a forged cert can intercept your API key and proxy mutations through your client.
 - **GraphQL must be enabled in Unraid.** The endpoint at `/graphql` is gated behind **Settings → Management Access → Developer Options** in the Unraid WebGUI; enable it once per server before the MCP client connects.
 
 ## MCP client setup
@@ -173,7 +173,7 @@ A [`Dockerfile`](Dockerfile) is included for operators who prefer containerized 
 docker build -t unraid-mcp:latest .
 ```
 
-Because MCP is a stdio protocol, the container is meant to be launched *per MCP session* — the client spawns `docker run -i` on demand. Example Claude Desktop config pointing at the container:
+Because MCP is a stdio protocol, the container is meant to be launched *per MCP session*; the client spawns `docker run -i` on demand. Example Claude Desktop config pointing at the container:
 
 ```jsonc
 {
@@ -225,7 +225,7 @@ See [.env.example](.env.example) for all configuration options.
 | `UNRAID_HOST` | `tower.local` | Unraid server hostname or IP |
 | `UNRAID_PORT` | `443` | HTTPS port for the API |
 | `UNRAID_USE_HTTPS` | `true` | Use HTTPS (set false for plain HTTP) |
-| `UNRAID_API_KEY` | — | API key from Unraid WebGUI |
+| `UNRAID_API_KEY` | _(required)_ | API key from Unraid WebGUI |
 | `UNRAID_VERIFY_SSL` | `true` | Verify TLS cert. Set `false` only for self-signed LAN certs (accepts MITM risk). |
 
 ## Development
@@ -250,4 +250,4 @@ uv run pre-commit install
 
 ## License
 
-Apache-2.0 — see [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](LICENSE).
