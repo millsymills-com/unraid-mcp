@@ -31,6 +31,21 @@ def _redact_api_key(key: SecretStr | str | None) -> str:
     return f"<set, {len(raw)} chars>"
 
 
+def _scrub_api_key(message: str, key: SecretStr | str | None) -> str:
+    """Replace the API key value with a placeholder wherever it appears in a message.
+
+    Typed-error preflight branches echo a wrapped client exception. The underlying
+    httpx error could embed the key (header dump, URL), so scrub the known value
+    rather than trust the library not to leak it.
+    """
+    if key is None:
+        return message
+    raw = key.get_secret_value() if isinstance(key, SecretStr) else key
+    if not raw:
+        return message
+    return message.replace(raw, "<redacted>")
+
+
 async def _check_schema() -> int:
     """Introspect the live schema and emit a drift report to stderr.
 
@@ -58,7 +73,7 @@ async def _check_schema() -> int:
         try:
             drifts = await client.check_schema_compatibility()
         except UnraidError as exc:
-            _emit(f"Schema check failed: {type(exc).__name__}: {exc}")
+            _emit(f"Schema check failed: {type(exc).__name__}: {_scrub_api_key(str(exc), api_key)}")
             return 2
         if not drifts:
             _emit(f"Schema compatibility check passed against {config.graphql_url}")
@@ -102,7 +117,7 @@ async def _check_config() -> int:
     try:
         await client.validate_connection()
     except UnraidError as exc:
-        _emit(f"  FAIL — {type(exc).__name__}: {exc}")
+        _emit(f"  FAIL — {type(exc).__name__}: {_scrub_api_key(str(exc), api_key)}")
         return 2
     except Exception as exc:  # defensive: unexpected failure; omit message — could embed the API key
         _emit(f"  FAIL — unexpected {type(exc).__name__}")
