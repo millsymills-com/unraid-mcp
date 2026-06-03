@@ -22,14 +22,13 @@ def _emit(message: str) -> None:
 
 
 def _redact_api_key(key: SecretStr | str | None) -> str:
+    """Describe the API key without echoing any of its characters."""
     if key is None:
         return "<not set>"
     raw = key.get_secret_value() if isinstance(key, SecretStr) else key
     if not raw:
         return "<not set>"
-    if len(raw) <= 8:
-        return "***"
-    return f"{raw[:4]}…{raw[-2:]}"
+    return f"<set, {len(raw)} chars>"
 
 
 async def _check_schema() -> int:

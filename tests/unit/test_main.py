@@ -12,14 +12,15 @@ class TestRedactApiKey:
     def test_none_shows_not_set(self):
         assert _redact_api_key(None) == "<not set>"
 
-    def test_short_key_is_fully_redacted(self):
-        assert _redact_api_key("abc123") == "***"
+    def test_empty_shows_not_set(self):
+        assert _redact_api_key("") == "<not set>"
 
-    def test_long_key_shows_head_and_tail(self):
-        redacted = _redact_api_key("abcdefghijklmnopqrstuvwxyz")
-        assert redacted.startswith("abcd")
-        assert redacted.endswith("yz")
-        assert "efghij" not in redacted
+    def test_reports_length_without_any_key_characters(self):
+        secret = "abcdefghijklmnopqrstuvwxyz"
+        redacted = _redact_api_key(secret)
+        assert redacted == f"<set, {len(secret)} chars>"
+        assert "abcd" not in redacted
+        assert "yz" not in redacted
 
 
 class TestCheckConfig:
@@ -41,9 +42,9 @@ class TestCheckConfig:
         captured = capsys.readouterr()
         assert captured.out == ""  # stdout reserved for stdio JSON-RPC
         assert "OK" in captured.err
-        # API key must be redacted in the output
+        # API key must be redacted in the output: length only, no characters
         assert "verylongsecretkey-not-shown" not in captured.err
-        assert "very" in captured.err  # prefix visible
+        assert "<set, 27 chars>" in captured.err
         mock_client.close.assert_awaited_once()
 
     async def test_validation_failure_exits_two(self, monkeypatch, capsys):
