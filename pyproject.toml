@@ -171,18 +171,6 @@ addopts = [
 filterwarnings = [
     "error",
     "ignore::DeprecationWarning:httpx.*",
-    # E2E tests spawn ``unraid-mcp`` over FastMCP's ``StdioTransport`` (anyio
-    # blocking portal + asyncio loop) and host a local ``pytest_httpserver``
-    # (thread + listening socket). Both leak by design: the portal's loop and
-    # the http server's socket are GC'd later, in the *next* test's setup
-    # window, where Python's unraisablehook surfaces the ``__del__``
-    # ResourceWarnings as ``PytestUnraisableExceptionWarning`` and trips
-    # ``filterwarnings = error``. The message starts with ``Exception ignored
-    # in:`` for every Python-emitted unraisable, so the filter below is
-    # narrower than ``ignore::pytest.PytestUnraisableExceptionWarning`` —
-    # genuine "code raised in __del__" warnings (different message shape) will
-    # still fail the suite. Tracked upstream in #174.
-    "ignore:Exception ignored in:pytest.PytestUnraisableExceptionWarning",
 ]
 
 [tool.coverage.run]
