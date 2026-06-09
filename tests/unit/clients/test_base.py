@@ -4,6 +4,7 @@ import logging
 
 import httpx
 import pytest
+import pytest_asyncio
 import respx
 
 from unraid_mcp.clients.base import BaseGraphQLClient
@@ -21,15 +22,17 @@ from unraid_mcp.errors import (
 GRAPHQL_URL = "https://tower.local:443/graphql"
 
 
-@pytest.fixture
-def client():
-    return BaseGraphQLClient(
+@pytest_asyncio.fixture
+async def client():
+    c = BaseGraphQLClient(
         graphql_url=GRAPHQL_URL,
         api_key="test-api-key",
         verify_ssl=False,
         timeout=5,
         max_retries=2,
     )
+    yield c
+    await c.close()
 
 
 class TestQuery:

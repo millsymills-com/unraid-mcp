@@ -7,6 +7,7 @@ import re
 
 import httpx
 import pytest
+import pytest_asyncio
 import respx
 
 from unraid_mcp.clients.unraid import UnraidClient
@@ -16,14 +17,16 @@ from unraid_mcp.models.users import User
 GRAPHQL_URL = "https://tower.local:443/graphql"
 
 
-@pytest.fixture
-def client():
-    return UnraidClient(
+@pytest_asyncio.fixture
+async def client():
+    c = UnraidClient(
         graphql_url=GRAPHQL_URL,
         api_key="test-key",
         timeout=5,
         max_retries=2,
     )
+    yield c
+    await c.close()
 
 
 class TestGetInfo:

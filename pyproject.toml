@@ -48,6 +48,7 @@ dev = [
     "pytest-httpserver>=1.1.0",
     "graphql-core>=3.2.6",
     "python-dotenv>=1.0.0",
+    "mutmut>=3.6.0",
 ]
 
 [project.scripts]
@@ -201,6 +202,27 @@ exclude_lines = [
     "raise NotImplementedError",
     "\\.\\.\\.",
 ]
+
+# =============================================================================
+# Mutmut — mutation testing (opt-in; CI workflow_dispatch only)
+# =============================================================================
+# Mutates the three behaviour-critical modules and replays the deterministic
+# unit suite (no live tiers, no stdio subprocess spawns) against each mutant.
+# Target: >=75% killed per module. Suite stability under a long-lived runner
+# depends on the autouse guards in tests/unit/clients/conftest.py (the macOS
+# system-proxy probe stub and the redaction-filter leak check); without them
+# the in-process re-runs segfault. Run locally with ``uv run mutmut run``;
+# inspect survivors with ``uv run mutmut results`` / ``uv run mutmut show``.
+[tool.mutmut]
+# Copy the whole package so mutated modules can still import their siblings,
+# but restrict the mutations themselves to the behaviour-critical modules.
+source_paths = ["src/unraid_mcp/"]
+only_mutate = [
+    "src/unraid_mcp/clients/*",
+    "src/unraid_mcp/tools/*",
+    "src/unraid_mcp/errors.py",
+]
+pytest_add_cli_args_test_selection = ["tests/unit/"]
 
 # =============================================================================
 # Bandit — security scanning

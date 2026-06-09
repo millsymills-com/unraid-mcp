@@ -1,0 +1,100 @@
+name: Mutation Testing
+
+# Opt-in only: mutation runs are slow, so this never fires on push/PR
+# automatically. Trigger it by hand from the Actions tab (optionally passing a
+# PR number to post the score as a comment). Scope and targets live in
+# ``[tool.mutmut]`` in pyproject.toml.
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to comment the mutation score on (optional)"
+        required: false
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  mutmut:
+    name: Mutmut
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run mutation tests
+        # Serial (--max-children 1) is the conservative default — deterministic
+        # ordering, one clear log to read on failure. ``|| true`` — a non-zero
+        # exit (survivors exist) must not fail the step; the score is reported,
+        # not gated.
+        run: uv run mutmut run --max-children 1 || true
+
+      - name: Export CI/CD stats
+        run: uv run mutmut export-cicd-stats
+
+      - name: Summarise score
+        id: score
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          import pathlib
+
+          stats = json.loads(pathlib.Path("mutants/mutmut-cicd-stats.json").read_text())
+          killed = stats["killed"]
+          survived = stats["survived"]
+          total = stats["total"]
+          resolved = killed + survived
+          pct = (killed / resolved * 100) if resolved else 0.0
+
+          report = "\n".join(
+              [
+                  "## Mutation testing (mutmut)",
+                  "",
+                  f"**Killed {killed}/{resolved} resolved mutants — {pct:.1f}%** "
+                  f"(target: 75% per module)",
+                  "",
+                  "| status | count |",
+                  "| --- | --- |",
+                  f"| 🎉 killed | {killed} |",
+                  f"| 🙁 survived | {survived} |",
+                  f"| 🫥 no tests | {stats['no_tests']} |",
+                  f"| ⏰ timeout | {stats['timeout']} |",
+                  f"| 🤔 suspicious | {stats['suspicious']} |",
+                  f"| total generated | {total} |",
+                  "",
+                  "Inspect survivors locally: `uv run mutmut results` / "
+                  "`uv run mutmut show <id>`.",
+              ]
+          )
+          pathlib.Path("mutation-report.md").write_text(report)
+          print(report)
+          PY
+
+      - name: Comment score on PR
+        if: inputs.pr_number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+        run: gh pr comment "$PR_NUMBER" --body-file mutation-report.md

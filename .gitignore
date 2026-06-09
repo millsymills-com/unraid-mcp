@@ -57,6 +57,10 @@ Thumbs.db
 # Hypothesis property-test database
 .hypothesis/
 
+# Mutmut mutation-testing working copy + cache
+mutants/
+.mutmut-cache
+
 # Claude Code workspace settings (may include local hostnames / API keys
 # pasted into Bash() permission allowlists)
 .claude/
