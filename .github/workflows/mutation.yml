@@ -45,11 +45,12 @@ jobs:
 
       - name: Run mutation tests
         # Serial (--max-children 1) is the conservative default — deterministic
-        # ordering, one clear log to read on failure. ``|| true`` — a non-zero
-        # exit (survivors exist) must not fail the step; the score is reported,
-        # not gated. A genuine mutmut crash is caught downstream: the summarise
-        # step fails loudly if no stats file or no resolved mutants is produced.
-        run: uv run mutmut run --max-children 1 || true
+        # ordering, one clear log to read on failure. mutmut exits 0 on a
+        # completed run regardless of survivors (the score is reported by the
+        # summarise step, not gated here); a non-zero exit means mutmut itself
+        # failed — clean tests broke, no tests cover the mutants, or it crashed
+        # — so let it fail the step rather than masking it with ``|| true``.
+        run: uv run mutmut run --max-children 1
 
       - name: Export CI/CD stats
         run: uv run mutmut export-cicd-stats
