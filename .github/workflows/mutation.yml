@@ -84,7 +84,7 @@ jobs:
                   "## Mutation testing (mutmut)",
                   "",
                   f"**Killed {killed}/{resolved} resolved mutants — {pct:.1f}%** "
-                  f"(global score, target ≥75%; reported, not gated)",
+                  f"(global score over resolved mutants — observability only, not gated)",
                   "",
                   "| status | count |",
                   "| --- | --- |",

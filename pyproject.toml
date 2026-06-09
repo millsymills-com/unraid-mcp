@@ -208,8 +208,9 @@ exclude_lines = [
 # =============================================================================
 # Mutates the three behaviour-critical modules and replays the deterministic
 # unit suite (no live tiers, no stdio subprocess spawns) against each mutant.
-# Target: >=75% killed per module. Suite stability under a long-lived runner
-# depends on the autouse guards in tests/unit/clients/conftest.py (the macOS
+# The workflow reports a single global kill rate for observability only; it is
+# not gated and has no pass/fail threshold. Suite stability under a long-lived
+# runner depends on the autouse guards in tests/unit/clients/conftest.py (the macOS
 # system-proxy probe stub and the redaction-filter leak check); without them
 # the in-process re-runs segfault. Run locally with ``uv run mutmut run``;
 # inspect survivors with ``uv run mutmut results`` / ``uv run mutmut show``.
