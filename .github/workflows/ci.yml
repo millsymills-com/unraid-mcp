@@ -86,11 +86,10 @@ jobs:
 
       - name: Run tests
         run: >
-          uv run pytest tests/unit/
+          uv run pytest
           --cov=unraid_mcp
           --cov-report=term-missing
           --cov-report=xml:coverage.xml
-          -m "not integration"
           -v
 
       - name: Upload coverage
