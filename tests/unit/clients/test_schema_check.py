@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import httpx
-import pytest
+import pytest_asyncio
 import respx
 
 from unraid_mcp.clients.unraid import UnraidClient, compute_schema_drift
@@ -11,9 +11,11 @@ from unraid_mcp.clients.unraid import UnraidClient, compute_schema_drift
 GRAPHQL_URL = "https://tower.local:443/graphql"
 
 
-@pytest.fixture
-def client():
-    return UnraidClient(graphql_url=GRAPHQL_URL, api_key="k", timeout=5, max_retries=1)
+@pytest_asyncio.fixture
+async def client():
+    c = UnraidClient(graphql_url=GRAPHQL_URL, api_key="k", timeout=5, max_retries=1)
+    yield c
+    await c.close()
 
 
 class TestComputeSchemaDrift:
