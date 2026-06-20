@@ -25,7 +25,7 @@ dependencies = [
     "fastmcp>=3.3.1,<4.0.0",
     "httpx>=0.28.1",
     "pydantic>=2.13.4",
-    "pydantic-settings>=2.14.1",
+    "pydantic-settings>=2.14.2",
     "tenacity>=9.1.4",
     # Pulled in transitively via fastmcp -> mcp; floors lifted here to patched
     # versions so pip-audit is clean (PYSEC-2026-175/177/178/179, PYSEC-2026-161).
