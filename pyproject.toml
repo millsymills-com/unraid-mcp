@@ -22,7 +22,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "fastmcp>=3.3.1,<4.0.0",
+    "fastmcp>=3.4.2,<4.0.0",
     "httpx>=0.28.1",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.1",
@@ -30,7 +30,7 @@ dependencies = [
     # Pulled in transitively via fastmcp -> mcp; floors lifted here to patched
     # versions so pip-audit is clean (PYSEC-2026-175/177/178/179, PYSEC-2026-161).
     "pyjwt>=2.13.0",
-    "starlette>=1.0.1",
+    "starlette>=1.3.1",
 ]
 
 [project.optional-dependencies]
@@ -42,11 +42,11 @@ dev = [
     "ruff>=0.15.15",
     "ty>=0.0.40",
     "bandit[toml]>=1.9.4",
-    "pip-audit>=2.10.0",
+    "pip-audit>=2.10.1",
     "pre-commit>=4.6.0",
     "hypothesis>=6.155.1",
     "pytest-httpserver>=1.1.0",
-    "graphql-core>=3.2.6",
+    "graphql-core>=3.2.11",
     "python-dotenv>=1.0.0",
     "mutmut>=3.6.0",
 ]
