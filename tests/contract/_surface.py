@@ -7,6 +7,7 @@ queries to what the snapshot schema exposes. No live env needed.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -96,3 +97,45 @@ def root_field_names(sdl: str) -> dict[str, set[str]]:
     schema = build_schema(sdl)
     roots = (schema.query_type, schema.mutation_type, schema.subscription_type)
     return {label: set(root.fields) if root else set() for label, root in zip(_ROOT_LABELS, roots, strict=True)}
+
+
+@dataclass(frozen=True)
+class CoverageViolations:
+    """Per-root-type registry rot, classified into the ratchet's three arms.
+
+    Each attribute is sorted for stable assertion messages.
+
+    Attributes:
+        unaccounted: Schema root fields that are neither invoked by a client
+            operation nor listed in the declined registry — the gap the ratchet
+            exists to catch.
+        now_covered: Declined fields a tool now invokes; the registry entry is
+            stale and should be dropped.
+        phantom: Declined fields absent from the schema; the registry entry
+            points at nothing and should be dropped.
+    """
+
+    unaccounted: list[str]
+    now_covered: list[str]
+    phantom: list[str]
+
+
+def classify_coverage(schema_fields: set[str], invoked: set[str], declined: set[str]) -> CoverageViolations:
+    """Partition coverage state into the ratchet's three violation arms.
+
+    Pure comparison over name sets for a single root type — no schema parsing,
+    no client introspection — so it can be driven with synthetic inputs.
+
+    Args:
+        schema_fields: Root field names the snapshot schema exposes.
+        invoked: Root field names a client operation selects (covered).
+        declined: Root field names listed as intentionally uncovered.
+
+    Returns:
+        A :class:`CoverageViolations` with each arm populated.
+    """
+    return CoverageViolations(
+        unaccounted=sorted(schema_fields - invoked - declined),
+        now_covered=sorted(declined & invoked),
+        phantom=sorted(declined - schema_fields),
+    )
