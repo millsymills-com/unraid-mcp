@@ -16,7 +16,7 @@ MinigraphStatus = Literal["PRE_INIT", "CONNECTING", "CONNECTED", "PING_FAILURE",
 class AccessUrl(UnraidBaseModel):
     """A single network access URL (LAN / WAN / etc.)."""
 
-    type: AccessUrlType | None = None
+    type: AccessUrlType | str | None = None
     name: str | None = None
     ipv4: str | None = None
     ipv6: str | None = None
@@ -47,7 +47,7 @@ class RelayHealth(UnraidBaseModel):
 class MinigraphHealth(UnraidBaseModel):
     """Mini-GraphQL link health."""
 
-    status: MinigraphStatus | None = None
+    status: MinigraphStatus | str | None = None
     timeout: int | None = None
     error: str | None = None
 
