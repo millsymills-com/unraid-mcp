@@ -41,6 +41,51 @@ TOOLS: list[ToolCoverage] = [
     ToolCoverage(name="unraid_get_flash", reads=True, writes=False, marker="integration"),
     ToolCoverage(name="unraid_get_registration", reads=True, writes=False, marker="integration"),
     ToolCoverage(name="unraid_get_connect", reads=True, writes=False, marker="integration"),
+    ToolCoverage(name="unraid_get_network", reads=True, writes=False, marker="integration"),
+    ToolCoverage(name="unraid_get_cloud", reads=True, writes=False, marker="integration"),
+    ToolCoverage(name="unraid_list_services", reads=True, writes=False, marker="integration"),
+    ToolCoverage(name="unraid_get_display_settings", reads=True, writes=False, marker="integration"),
+    ToolCoverage(name="unraid_get_api_settings", reads=True, writes=False, marker="integration"),
+    ToolCoverage(name="unraid_get_system_time", reads=True, writes=False, marker="integration"),
+    ToolCoverage(name="unraid_list_timezone_options", reads=True, writes=False, marker="integration"),
+    ToolCoverage(name="unraid_get_vars", reads=True, writes=False, marker="integration"),
+    # ── metrics ──
+    ToolCoverage(name="unraid_get_metrics", reads=True, writes=False, marker="integration"),
+    # ── ups ──
+    ToolCoverage(name="unraid_list_ups_devices", reads=True, writes=False, marker="integration"),
+    ToolCoverage(
+        name="unraid_get_ups_device",
+        reads=True,
+        writes=False,
+        marker=None,
+        skip_reason="requires a known UPS device id; no stable live asset",
+    ),
+    ToolCoverage(name="unraid_get_ups_configuration", reads=True, writes=False, marker="integration"),
+    # ── plugins ──
+    ToolCoverage(name="unraid_list_plugins", reads=True, writes=False, marker="integration"),
+    ToolCoverage(name="unraid_list_installed_plugins", reads=True, writes=False, marker="integration"),
+    ToolCoverage(name="unraid_list_plugin_install_operations", reads=True, writes=False, marker="integration"),
+    ToolCoverage(
+        name="unraid_get_plugin_install_operation",
+        reads=True,
+        writes=False,
+        marker=None,
+        skip_reason="requires a known operation id; no stable live asset",
+    ),
+    # ── logs ──
+    ToolCoverage(name="unraid_list_log_files", reads=True, writes=False, marker="integration"),
+    ToolCoverage(
+        name="unraid_read_log_file",
+        reads=True,
+        writes=False,
+        marker=None,
+        skip_reason="requires a known log path; covered indirectly via list_log_files",
+    ),
+    # ── oidc ──
+    ToolCoverage(name="unraid_get_sso_status", reads=True, writes=False, marker="integration"),
+    ToolCoverage(name="unraid_list_public_oidc_providers", reads=True, writes=False, marker="integration"),
+    # ── rclone ──
+    ToolCoverage(name="unraid_get_rclone_config", reads=True, writes=False, marker="integration"),
     # ── array ──
     ToolCoverage(name="unraid_get_array", reads=True, writes=False, marker="integration"),
     ToolCoverage(
@@ -66,6 +111,7 @@ TOOLS: list[ToolCoverage] = [
     # ── disks ──
     ToolCoverage(name="unraid_list_disks", reads=True, writes=False, marker="integration"),
     ToolCoverage(name="unraid_get_disk", reads=True, writes=False, marker="integration"),
+    ToolCoverage(name="unraid_list_assignable_disks", reads=True, writes=False, marker="integration"),
     # ── docker ──
     ToolCoverage(name="unraid_list_containers", reads=True, writes=False, marker="integration"),
     ToolCoverage(name="unraid_get_container", reads=True, writes=False, marker="integration"),

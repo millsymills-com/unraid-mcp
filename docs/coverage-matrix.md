@@ -4,7 +4,7 @@ Precise mapping of `unraid-mcp` tools to the Unraid GraphQL API surface.
 
 - **Schema source:** `tests/contract/snapshot.graphql` (the pinned introspection
   snapshot the drift test asserts against).
-- **Tools source:** `src/unraid_mcp/tools/` (36 domain tools: 16 read, 20 write).
+- **Tools source:** `src/unraid_mcp/tools/` (58 domain tools: 38 read, 20 write).
 - **Legend:** ✓ covered · ◐ partial (namespace reached, some leaves missing) ·
   ✗ not implemented.
 - **Enforced by** `tests/contract/test_root_coverage.py`: every **root** field
@@ -19,10 +19,10 @@ Precise mapping of `unraid-mcp` tools to the Unraid GraphQL API surface.
 
 | Root type | Schema fields | Touched | Coverage |
 |-----------|--------------:|--------:|---------:|
-| `Query` | 57 | 14 | **24.6%** |
+| `Query` | 57 | 36 | **63.2%** |
 | `Mutation` (root fields) | 45 | 7 | **15.6%** |
 | `Subscription` | 16 | 0 | **0%** |
-| **All roots** | **118** | **21** | **17.8%** |
+| **All roots** | **118** | **43** | **36.4%** |
 
 Operation-level (expanding the 4 mutation namespaces we reach into):
 
@@ -34,7 +34,7 @@ The split is deliberate: read coverage is broad-but-shallow over operational
 state; write coverage is deep on lifecycle namespaces (array, parity, Docker,
 VM, notifications) and absent everywhere else (config, auth, plugins, UPS, cloud).
 
-## Query (14 / 57)
+## Query (36 / 57)
 
 | Query field | Tool | Status |
 |-------------|------|:------:|
@@ -43,6 +43,7 @@ VM, notifications) and absent everywhere else (config, auth, plugins, UPS, cloud
 | `parityHistory` | `unraid_get_parity_history` | ✓ |
 | `disks` | `unraid_list_disks` | ✓ |
 | `disk` | `unraid_get_disk` | ✓ |
+| `assignableDisks` | `unraid_list_assignable_disks` | ✓ |
 | `docker` | `unraid_list_containers`, `unraid_get_container`, `unraid_list_docker_networks` | ✓ |
 | `vms` | `unraid_list_vms` | ✓ |
 | `shares` | `unraid_list_shares`, `unraid_get_share` | ✓ |
@@ -52,18 +53,31 @@ VM, notifications) and absent everywhere else (config, auth, plugins, UPS, cloud
 | `registration` | `unraid_get_registration` | ✓ |
 | `connect` | `unraid_get_connect` | ✓ |
 | `remoteAccess` | `unraid_get_connect` (combined query) | ✓ |
+| `metrics` | `unraid_get_metrics` | ✓ |
+| `upsDevices` | `unraid_list_ups_devices` | ✓ |
+| `upsDeviceById` | `unraid_get_ups_device` | ✓ |
+| `upsConfiguration` | `unraid_get_ups_configuration` | ✓ |
+| `plugins` | `unraid_list_plugins` | ✓ |
+| `installedUnraidPlugins` | `unraid_list_installed_plugins` | ✓ |
+| `pluginInstallOperations` | `unraid_list_plugin_install_operations` | ✓ |
+| `pluginInstallOperation` | `unraid_get_plugin_install_operation` | ✓ |
+| `logFiles` | `unraid_list_log_files` | ✓ |
+| `logFile` | `unraid_read_log_file` | ✓ |
+| `isSSOEnabled` | `unraid_get_sso_status` | ✓ |
+| `publicOidcProviders` | `unraid_list_public_oidc_providers` | ✓ |
+| `network` | `unraid_get_network` | ✓ |
+| `cloud` | `unraid_get_cloud` | ✓ |
+| `services` | `unraid_list_services` | ✓ |
+| `display` | `unraid_get_display_settings` | ✓ |
+| `settings` | `unraid_get_api_settings` (`.api` branch only) | ✓ |
+| `systemTime` | `unraid_get_system_time` | ✓ |
+| `timeZoneOptions` | `unraid_list_timezone_options` | ✓ |
+| `vars` | `unraid_get_vars` (curated, `csrfToken` omitted) | ✓ |
+| `rclone` | `unraid_get_rclone_config` (credentials redacted) | ✓ |
 | `apiKeys` / `apiKey` / `apiKeyPossibleRoles` / `apiKeyPossiblePermissions` / `getPermissionsForRoles` / `previewEffectivePermissions` / `getAvailableAuthActions` / `getApiKeyCreationFormSchema` | — | ✗ |
-| `config` / `settings` / `customization` / `display` / `publicTheme` | — | ✗ |
-| `isSSOEnabled` / `publicOidcProviders` / `oidcProviders` / `oidcProvider` / `oidcConfiguration` / `validateOidcSession` | — | ✗ |
-| `metrics` | — | ✗ |
-| `upsDevices` / `upsDeviceById` / `upsConfiguration` | — | ✗ |
-| `plugins` / `installedUnraidPlugins` / `pluginInstallOperation` / `pluginInstallOperations` | — | ✗ |
-| `rclone` | — | ✗ |
-| `logFiles` / `logFile` | — | ✗ |
-| `network` / `cloud` | — | ✗ |
-| `server` / `servers` / `services` | — | ✗ |
-| `systemTime` / `timeZoneOptions` / `vars` | — | ✗ |
-| `online` / `owner` / `internalBootContext` / `isFreshInstall` / `assignableDisks` | — | ✗ |
+| `config` / `customization` / `publicTheme` / `isFreshInstall` | — | ✗ |
+| `oidcProviders` / `oidcProvider` / `oidcConfiguration` / `validateOidcSession` (admin — carries `clientSecret`) | — | ✗ |
+| `online` / `owner` / `internalBootContext` / `server` / `servers` | — | ✗ |
 
 ## Mutation
 

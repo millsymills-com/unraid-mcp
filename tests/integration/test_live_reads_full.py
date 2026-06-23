@@ -140,3 +140,92 @@ async def test_unraid_get_me(live_mcp_client: Client) -> None:
 
 async def test_unraid_list_notifications(live_mcp_client: Client) -> None:
     await live_mcp_client.call_tool("unraid_list_notifications", {})
+
+
+# ── Phase-1 read coverage ──
+
+
+async def test_unraid_get_network(live_mcp_client: Client) -> None:
+    result = await live_mcp_client.call_tool("unraid_get_network", {})
+    assert result.structured_content is not None
+
+
+async def test_unraid_get_cloud(live_mcp_client: Client) -> None:
+    result = await live_mcp_client.call_tool("unraid_get_cloud", {})
+    assert result.structured_content is not None
+
+
+async def test_unraid_list_services(live_mcp_client: Client) -> None:
+    await live_mcp_client.call_tool("unraid_list_services", {})
+
+
+async def test_unraid_get_display_settings(live_mcp_client: Client) -> None:
+    result = await live_mcp_client.call_tool("unraid_get_display_settings", {})
+    assert result.structured_content is not None
+
+
+async def test_unraid_get_api_settings(live_mcp_client: Client) -> None:
+    result = await live_mcp_client.call_tool("unraid_get_api_settings", {})
+    assert result.structured_content is not None
+
+
+async def test_unraid_get_system_time(live_mcp_client: Client) -> None:
+    result = await live_mcp_client.call_tool("unraid_get_system_time", {})
+    assert result.structured_content is not None
+
+
+async def test_unraid_list_timezone_options(live_mcp_client: Client) -> None:
+    await live_mcp_client.call_tool("unraid_list_timezone_options", {})
+
+
+async def test_unraid_get_vars(live_mcp_client: Client) -> None:
+    result = await live_mcp_client.call_tool("unraid_get_vars", {})
+    assert result.structured_content is not None
+
+
+async def test_unraid_get_metrics(live_mcp_client: Client) -> None:
+    result = await live_mcp_client.call_tool("unraid_get_metrics", {})
+    assert result.structured_content is not None
+
+
+async def test_unraid_list_ups_devices(live_mcp_client: Client) -> None:
+    await live_mcp_client.call_tool("unraid_list_ups_devices", {})
+
+
+async def test_unraid_get_ups_configuration(live_mcp_client: Client) -> None:
+    result = await live_mcp_client.call_tool("unraid_get_ups_configuration", {})
+    assert result.structured_content is not None
+
+
+async def test_unraid_list_plugins(live_mcp_client: Client) -> None:
+    await live_mcp_client.call_tool("unraid_list_plugins", {})
+
+
+async def test_unraid_list_installed_plugins(live_mcp_client: Client) -> None:
+    await live_mcp_client.call_tool("unraid_list_installed_plugins", {})
+
+
+async def test_unraid_list_plugin_install_operations(live_mcp_client: Client) -> None:
+    await live_mcp_client.call_tool("unraid_list_plugin_install_operations", {})
+
+
+async def test_unraid_list_log_files(live_mcp_client: Client) -> None:
+    await live_mcp_client.call_tool("unraid_list_log_files", {})
+
+
+async def test_unraid_get_sso_status(live_mcp_client: Client) -> None:
+    result = await live_mcp_client.call_tool("unraid_get_sso_status", {})
+    assert result.structured_content is not None
+
+
+async def test_unraid_list_public_oidc_providers(live_mcp_client: Client) -> None:
+    await live_mcp_client.call_tool("unraid_list_public_oidc_providers", {})
+
+
+async def test_unraid_get_rclone_config(live_mcp_client: Client) -> None:
+    result = await live_mcp_client.call_tool("unraid_get_rclone_config", {})
+    assert result.structured_content is not None
+
+
+async def test_unraid_list_assignable_disks(live_mcp_client: Client) -> None:
+    await live_mcp_client.call_tool("unraid_list_assignable_disks", {})
