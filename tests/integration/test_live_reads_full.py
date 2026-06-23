@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 import pytest
 import pytest_asyncio
 from fastmcp import Client
+from fastmcp.exceptions import ToolError
 
 from unraid_mcp.config import UnraidConfig, UnraidMode
 from unraid_mcp.server import create_server
@@ -189,7 +190,15 @@ async def test_unraid_get_metrics(live_mcp_client: Client) -> None:
 
 
 async def test_unraid_list_ups_devices(live_mcp_client: Client) -> None:
-    await live_mcp_client.call_tool("unraid_list_ups_devices", {})
+    try:
+        await live_mcp_client.call_tool("unraid_list_ups_devices", {})
+    except ToolError as exc:
+        # A tower without UPS hardware makes the server's resolver error
+        # ("No UPS data returned from apcaccess") rather than return an empty
+        # roster — environmental, not a client failure (#262).
+        if "apcaccess" in str(exc) or "No UPS data" in str(exc):
+            pytest.skip("no UPS hardware on this Unraid server")
+        raise
 
 
 async def test_unraid_get_ups_configuration(live_mcp_client: Client) -> None:
