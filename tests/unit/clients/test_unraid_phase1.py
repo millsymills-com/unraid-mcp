@@ -8,6 +8,8 @@ constants (PROTO-012).
 
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 import pytest_asyncio
@@ -16,6 +18,7 @@ import respx
 from unraid_mcp.clients import unraid as unraid_module
 from unraid_mcp.clients.unraid import UnraidClient
 from unraid_mcp.errors import UnraidError, UnraidNotFoundError
+from unraid_mcp.models.network import ApiKeyHealth
 
 GRAPHQL_URL = "https://tower.local:443/graphql"
 
@@ -81,6 +84,12 @@ class TestUps:
             await client.get_ups_device("ups-x")
 
     @respx.mock
+    async def test_get_ups_device_non_dict_raises(self, client):
+        respx.post(GRAPHQL_URL).mock(return_value=_ok({"upsDeviceById": "garbage"}))
+        with pytest.raises(UnraidError, match="upsDeviceById"):
+            await client.get_ups_device("ups1")
+
+    @respx.mock
     async def test_ups_configuration_model_name_alias(self, client):
         respx.post(GRAPHQL_URL).mock(
             return_value=_ok({"upsConfiguration": {"service": "enable", "modelName": "APC"}}),
@@ -112,6 +121,12 @@ class TestPlugins:
         with pytest.raises(UnraidNotFoundError, match="op-1"):
             await client.get_plugin_install_operation("op-1")
 
+    @respx.mock
+    async def test_get_plugin_install_operation_non_dict_raises(self, client):
+        respx.post(GRAPHQL_URL).mock(return_value=_ok({"pluginInstallOperation": "garbage"}))
+        with pytest.raises(UnraidError, match="pluginInstallOperation"):
+            await client.get_plugin_install_operation("op-1")
+
 
 class TestLogs:
     @respx.mock
@@ -127,9 +142,8 @@ class TestLogs:
         )
         result = await client.read_log_file("/p", lines=10, start_line=5)
         assert result.start_line == 5
-        sent = route.calls.last.request
-        assert b'"lines":10' in sent.content
-        assert b'"startLine":5' in sent.content
+        sent = json.loads(route.calls.last.request.content)
+        assert sent["variables"] == {"path": "/p", "lines": 10, "startLine": 5}
 
 
 class TestOidc:
@@ -215,11 +229,39 @@ class TestSystemExtras:
         assert result.drives[0].name == "s3"
 
 
+class TestNonNullRootDriftRaises:
+    """#248: schema-non-null roots raise on null instead of fabricating ``{}``."""
+
+    @pytest.mark.parametrize(
+        ("key", "method"),
+        [
+            ("cloud", "get_cloud"),
+            ("network", "get_network"),
+            ("rclone", "get_rclone_config"),
+            ("upsConfiguration", "get_ups_configuration"),
+        ],
+    )
+    @respx.mock
+    async def test_null_non_null_root_raises(self, client, key, method):
+        respx.post(GRAPHQL_URL).mock(return_value=_ok({key: None}))
+        with pytest.raises(UnraidError, match=key):
+            await getattr(client, method)()
+
+    @respx.mock
+    async def test_nullable_list_root_normalizes_to_empty(self, client):
+        respx.post(GRAPHQL_URL).mock(return_value=_ok({"services": None}))
+        assert await client.list_services() == []
+
+
 class TestSecurityOmissions:
     """PROTO-012: secret-bearing fields are never selected by the queries."""
 
     def test_vars_query_omits_csrf_token(self):
         assert "csrfToken" not in unraid_module.QUERY_VARS
+
+    def test_cloud_apikey_model_has_no_key_material(self):
+        assert set(ApiKeyHealth.model_fields) == {"valid", "error"}
+        assert "clientSecret" not in unraid_module.QUERY_CLOUD
 
     def test_rclone_query_omits_parameters_and_config(self):
         assert "parameters" not in unraid_module.QUERY_RCLONE_CONFIG
