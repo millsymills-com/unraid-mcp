@@ -1068,13 +1068,14 @@ class UnraidClient(BaseGraphQLClient):
     async def list_containers(self) -> list[DockerContainer]:
         """List all Docker containers.
 
-        On Unraid API 4.32+ the field group lives at ``docker.containers``;
-        a present-but-null ``docker`` (Docker daemon unreachable on the
-        server) normalises to an empty list rather than raising — schema
-        drift only fires when the top-level ``docker`` key is missing.
+        On Unraid API 4.32+ the field group lives at ``docker.containers``.
+        ``docker`` is a schema-non-null root (``Docker!``), so a null root is
+        treated as a contract violation and raised (#267); the
+        daemon-unreachable tolerance lives one level deeper — a null
+        ``docker.containers`` normalises to an empty list.
         """
         result = await self.query(QUERY_DOCKER_CONTAINERS)
-        docker = _require_dict(result, "docker")
+        docker = _require_dict(result, "docker", allow_null=False)
         containers = docker.get("containers")
         if containers is None:
             return []
@@ -1129,10 +1130,11 @@ class UnraidClient(BaseGraphQLClient):
         """List Docker networks.
 
         On Unraid API 4.32+ the field group lives at ``docker.networks``;
-        same null-tolerance behaviour as :meth:`list_containers`.
+        same root-vs-nested null handling as :meth:`list_containers` — a null
+        ``docker`` root raises, a null ``docker.networks`` normalises to ``[]``.
         """
         result = await self.query(QUERY_DOCKER_NETWORKS)
-        docker = _require_dict(result, "docker")
+        docker = _require_dict(result, "docker", allow_null=False)
         networks = docker.get("networks")
         if networks is None:
             return []
