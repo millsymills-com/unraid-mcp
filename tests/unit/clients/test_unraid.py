@@ -97,13 +97,13 @@ class TestListContainers:
             await client.list_containers()
 
     @respx.mock
-    async def test_list_containers_normalizes_null_docker_to_empty_list(self, client):
-        # Docker daemon unavailable returns {"data": {"docker": null}}; treat
-        # like an empty roster rather than raising — drift only fires for a
-        # missing top-level key, not a present-but-null one (#55).
+    async def test_list_containers_raises_on_null_docker_root(self, client):
+        # ``docker`` is a schema-non-null root (``Docker!``); a null root is a
+        # contract violation and must raise, not fabricate an empty roster
+        # (#267). Daemon-unreachable tolerance lives at ``docker.containers``.
         respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"docker": None}}))
-        result = await client.list_containers()
-        assert result == []
+        with pytest.raises(UnraidError, match="docker"):
+            await client.list_containers()
 
     @respx.mock
     async def test_list_containers_normalizes_null_containers_to_empty_list(self, client):
@@ -139,8 +139,18 @@ class TestListDockerNetworks:
         assert [n.name for n in result] == ["bridge"]
 
     @respx.mock
-    async def test_list_docker_networks_normalizes_null_docker_to_empty_list(self, client):
+    async def test_list_docker_networks_raises_on_null_docker_root(self, client):
+        # Same non-null-root contract as list_containers (#267).
         respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"docker": None}}))
+        with pytest.raises(UnraidError, match="docker"):
+            await client.list_docker_networks()
+
+    @respx.mock
+    async def test_list_docker_networks_normalizes_null_networks_to_empty_list(self, client):
+        # Daemon-unreachable tolerance lives at ``docker.networks`` (#267).
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(200, json={"data": {"docker": {"networks": None}}}),
+        )
         result = await client.list_docker_networks()
         assert result == []
 
@@ -880,6 +890,15 @@ class TestGetContainer:
         respx.post(GRAPHQL_URL).mock(side_effect=lambda _request: next(responses))
         result = await client.get_container("plex")
         assert result.id == "abc"
+
+    @respx.mock
+    async def test_null_docker_root_raises_via_fallback(self, client):
+        # A null ``docker`` root from the singular query isn't a dict, so the
+        # method falls back to list_containers, which raises the non-null-root
+        # contract violation (#267) rather than reporting "not found".
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"docker": None}}))
+        with pytest.raises(UnraidError, match="docker"):
+            await client.get_container("abc")
 
     @respx.mock
     async def test_not_found_raises_unraid_not_found(self, client):

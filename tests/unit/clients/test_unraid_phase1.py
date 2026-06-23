@@ -251,6 +251,8 @@ class TestNonNullRootDriftRaises:
             ("notifications", "list_notifications"),
             ("flash", "get_flash"),
             ("connect", "get_connect"),
+            ("docker", "list_containers"),
+            ("docker", "list_docker_networks"),
         ],
     )
     @respx.mock
