@@ -7,6 +7,10 @@ Precise mapping of `unraid-mcp` tools to the Unraid GraphQL API surface.
 - **Tools source:** `src/unraid_mcp/tools/` (36 domain tools: 16 read, 20 write).
 - **Legend:** ✓ covered · ◐ partial (namespace reached, some leaves missing) ·
   ✗ not implemented.
+- **Enforced by** `tests/contract/test_root_coverage.py`: every root field must be
+  reachable by a tool or listed in that test's `INTENTIONALLY_UNCOVERED` registry.
+  A new schema root field with neither fails CI. Keep this doc and that registry
+  in step.
 
 ## Headline numbers
 
@@ -14,8 +18,8 @@ Precise mapping of `unraid-mcp` tools to the Unraid GraphQL API surface.
 |-----------|--------------:|--------:|---------:|
 | `Query` | 57 | 14 | **24.6%** |
 | `Mutation` (root fields) | 45 | 7 | **15.6%** |
-| `Subscription` | 17 | 0 | **0%** |
-| **All roots** | **119** | **21** | **17.6%** |
+| `Subscription` | 16 | 0 | **0%** |
+| **All roots** | **118** | **21** | **17.8%** |
 
 Operation-level (expanding the 4 mutation namespaces we reach into):
 
@@ -122,7 +126,7 @@ VM, notifications) and absent everywhere else (config, auth, plugins, UPS, cloud
 `*DockerView*` / `*DockerTemplate*` / `refreshDockerDigests` organizer
 mutations — all ✗.
 
-## Subscription (0 / 17)
+## Subscription (0 / 16)
 
 No subscriptions are implemented. The transport is request/response only.
 Uncovered: `displaySubscription`, `notificationAdded`, `notificationsOverview`,
