@@ -15,7 +15,7 @@ import respx
 
 from unraid_mcp.clients import unraid as unraid_module
 from unraid_mcp.clients.unraid import UnraidClient
-from unraid_mcp.errors import UnraidNotFoundError
+from unraid_mcp.errors import UnraidError, UnraidNotFoundError
 
 GRAPHQL_URL = "https://tower.local:443/graphql"
 
@@ -137,6 +137,23 @@ class TestOidc:
     async def test_get_sso_status(self, client):
         respx.post(GRAPHQL_URL).mock(return_value=_ok({"isSSOEnabled": True}))
         assert await client.get_sso_status() is True
+
+    @respx.mock
+    async def test_get_sso_status_false(self, client):
+        respx.post(GRAPHQL_URL).mock(return_value=_ok({"isSSOEnabled": False}))
+        assert await client.get_sso_status() is False
+
+    @respx.mock
+    async def test_get_sso_status_missing_field_raises(self, client):
+        respx.post(GRAPHQL_URL).mock(return_value=_ok({}))
+        with pytest.raises(UnraidError, match="isSSOEnabled"):
+            await client.get_sso_status()
+
+    @respx.mock
+    async def test_get_sso_status_null_raises(self, client):
+        respx.post(GRAPHQL_URL).mock(return_value=_ok({"isSSOEnabled": None}))
+        with pytest.raises(UnraidError, match="isSSOEnabled"):
+            await client.get_sso_status()
 
     @respx.mock
     async def test_list_public_oidc_providers(self, client):

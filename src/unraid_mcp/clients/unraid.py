@@ -1311,9 +1311,20 @@ class UnraidClient(BaseGraphQLClient):
     # ── Read methods: OIDC / SSO ────────────────────────────────────────
 
     async def get_sso_status(self) -> bool:
-        """Return whether single sign-on (SSO) is enabled."""
+        """Return whether single sign-on (SSO) is enabled.
+
+        Raises:
+            UnraidError: when ``isSSOEnabled`` (a non-null schema field) is
+                absent or not a boolean, signalling schema drift rather than a
+                genuine ``False``.
+        """
         result = await self.query(QUERY_SSO_STATUS)
-        return bool(result.get("isSSOEnabled"))
+        enabled = result.get("isSSOEnabled")
+        if not isinstance(enabled, bool):
+            raise UnraidError(
+                f"Expected bool for 'isSSOEnabled', got {type(enabled).__name__}; run `unraid-mcp --check-schema`"
+            )
+        return enabled
 
     async def list_public_oidc_providers(self) -> list[PublicOidcProvider]:
         """List public OIDC providers (secret-free login-button projection)."""
