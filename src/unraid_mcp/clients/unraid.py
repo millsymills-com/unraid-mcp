@@ -950,12 +950,20 @@ def compute_schema_drift(
     return drifts
 
 
-def _require_dict(result: dict[str, Any], key: str) -> dict[str, Any]:
+def _require_dict(result: dict[str, Any], key: str, *, allow_null: bool = True) -> dict[str, Any]:
     """Return ``result[key]`` as a dict, raising on missing or wrong-typed values.
 
-    A null value is normalized to an empty dict — the GraphQL contract allows
-    a present-but-null field. A missing top-level key is treated as schema
-    drift and raised so callers do not silently see empty results (#65).
+    A missing top-level key is treated as schema drift and raised so callers do
+    not silently see empty results (#65).
+
+    Args:
+        result: The GraphQL ``data`` block.
+        key: Top-level field to extract.
+        allow_null: When ``True`` (default) a present-but-null value is
+            normalized to ``{}`` — the GraphQL contract allows a nullable field
+            to be null. When ``False`` (schema-non-null roots), a null value is
+            raised as drift instead of fabricating a populated-looking empty
+            object (#248).
     """
     if key not in result:
         raise UnraidError(
@@ -964,7 +972,12 @@ def _require_dict(result: dict[str, Any], key: str) -> dict[str, Any]:
         )
     value = result[key]
     if value is None:
-        return {}
+        if allow_null:
+            return {}
+        raise UnraidError(
+            f"Got null for non-null GraphQL field '{key}'. The server violated its own schema — "
+            "run `unraid-mcp --check-schema` to check for drift.",
+        )
     if not isinstance(value, dict):
         raise UnraidError(f"Expected dict for '{key}' in GraphQL response, got {type(value).__name__}")
     return value
@@ -1223,7 +1236,7 @@ class UnraidClient(BaseGraphQLClient):
         it belongs to the streaming subscription, not this snapshot.
         """
         result = await self.query(QUERY_METRICS)
-        return Metrics.model_validate(_require_dict(result, "metrics"))
+        return Metrics.model_validate(_require_dict(result, "metrics", allow_null=False))
 
     # ── Read methods: UPS ───────────────────────────────────────────────
 
@@ -1249,7 +1262,7 @@ class UnraidClient(BaseGraphQLClient):
     async def get_ups_configuration(self) -> UPSConfiguration:
         """Get the UPS monitoring service configuration."""
         result = await self.query(QUERY_UPS_CONFIGURATION)
-        return UPSConfiguration.model_validate(_require_dict(result, "upsConfiguration"))
+        return UPSConfiguration.model_validate(_require_dict(result, "upsConfiguration", allow_null=False))
 
     # ── Read methods: plugins ───────────────────────────────────────────
 
@@ -1336,12 +1349,12 @@ class UnraidClient(BaseGraphQLClient):
     async def get_network(self) -> Network:
         """Get the server's network access URLs."""
         result = await self.query(QUERY_NETWORK)
-        return Network.model_validate(_require_dict(result, "network"))
+        return Network.model_validate(_require_dict(result, "network", allow_null=False))
 
     async def get_cloud(self) -> Cloud:
         """Get Unraid Connect cloud health (secret-free)."""
         result = await self.query(QUERY_CLOUD)
-        return Cloud.model_validate(_require_dict(result, "cloud"))
+        return Cloud.model_validate(_require_dict(result, "cloud", allow_null=False))
 
     async def list_services(self) -> list[Service]:
         """List background services and their status."""
@@ -1351,17 +1364,17 @@ class UnraidClient(BaseGraphQLClient):
     async def get_display_settings(self) -> DisplaySettings:
         """Get UI display settings (case image ``base64`` omitted)."""
         result = await self.query(QUERY_DISPLAY)
-        return DisplaySettings.model_validate(_require_dict(result, "display"))
+        return DisplaySettings.model_validate(_require_dict(result, "display", allow_null=False))
 
     async def get_api_settings(self) -> ApiSettings:
         """Get the ``settings.api`` configuration branch."""
         result = await self.query(QUERY_API_SETTINGS)
-        return ApiSettings.model_validate(_require_dict(result, "settings"))
+        return ApiSettings.model_validate(_require_dict(result, "settings", allow_null=False))
 
     async def get_system_time(self) -> SystemTime:
         """Get the current server time configuration."""
         result = await self.query(QUERY_SYSTEM_TIME)
-        return SystemTime.model_validate(_require_dict(result, "systemTime"))
+        return SystemTime.model_validate(_require_dict(result, "systemTime", allow_null=False))
 
     async def list_timezone_options(self) -> list[TimeZoneOption]:
         """List available IANA timezone options."""
@@ -1371,7 +1384,7 @@ class UnraidClient(BaseGraphQLClient):
     async def get_vars(self) -> Vars:
         """Get a curated, secret-free subset of Unraid system variables."""
         result = await self.query(QUERY_VARS)
-        return Vars.model_validate(_require_dict(result, "vars"))
+        return Vars.model_validate(_require_dict(result, "vars", allow_null=False))
 
     # ── Read methods: disks (assignable) ────────────────────────────────
 
@@ -1385,7 +1398,7 @@ class UnraidClient(BaseGraphQLClient):
     async def get_rclone_config(self) -> RCloneConfig:
         """Get rclone backup configuration (credential JSON redacted)."""
         result = await self.query(QUERY_RCLONE_CONFIG)
-        return RCloneConfig.model_validate(_require_dict(result, "rclone"))
+        return RCloneConfig.model_validate(_require_dict(result, "rclone", allow_null=False))
 
     # ── Write methods: array ────────────────────────────────────────────
 
