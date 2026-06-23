@@ -1,6 +1,13 @@
 version: 2
 updates:
   # Python dependencies — uv ecosystem so uv.lock gets updated.
+  #
+  # Every update lands in exactly one group: dependencies are matched against
+  # groups in declaration order, so each version/security update joins the first
+  # group it matches and is never also emitted as an individual PR. Groups have
+  # no `update-types` filter, so majors stay grouped too (no individual-PR leak).
+  # `applies-to: security-updates` groups co-dependent advisories into a single
+  # PR that can clear the `Dependency Audit` check in one merge.
   - package-ecosystem: "uv"
     directory: "/"
     schedule:
@@ -14,7 +21,8 @@ updates:
       prefix: "deps"
     open-pull-requests-limit: 10
     groups:
-      dev-dependencies:
+      dev-version-updates:
+        applies-to: version-updates
         patterns:
           - "pytest*"
           - "ruff"
@@ -23,10 +31,8 @@ updates:
           - "respx"
           - "pre-commit"
           - "hypothesis"
-        update-types:
-          - "minor"
-          - "patch"
-      production-dependencies:
+      production-version-updates:
+        applies-to: version-updates
         patterns:
           - "*"
         exclude-patterns:
@@ -37,9 +43,28 @@ updates:
           - "respx"
           - "pre-commit"
           - "hypothesis"
-        update-types:
-          - "minor"
-          - "patch"
+      dev-security-updates:
+        applies-to: security-updates
+        patterns:
+          - "pytest*"
+          - "ruff"
+          - "ty"
+          - "bandit*"
+          - "respx"
+          - "pre-commit"
+          - "hypothesis"
+      production-security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "pytest*"
+          - "ruff"
+          - "ty"
+          - "bandit*"
+          - "respx"
+          - "pre-commit"
+          - "hypothesis"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -55,6 +80,15 @@ updates:
     commit-message:
       prefix: "ci"
     open-pull-requests-limit: 5
+    groups:
+      github-actions-version-updates:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      github-actions-security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
 
   # Docker base images (Dockerfile)
   - package-ecosystem: "docker"
@@ -70,3 +104,12 @@ updates:
     commit-message:
       prefix: "deps"
     open-pull-requests-limit: 5
+    groups:
+      docker-version-updates:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      docker-security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
