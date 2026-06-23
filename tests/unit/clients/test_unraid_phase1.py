@@ -239,6 +239,11 @@ class TestNonNullRootDriftRaises:
             ("network", "get_network"),
             ("rclone", "get_rclone_config"),
             ("upsConfiguration", "get_ups_configuration"),
+            ("metrics", "get_metrics"),
+            ("display", "get_display_settings"),
+            ("settings", "get_api_settings"),
+            ("systemTime", "get_system_time"),
+            ("vars", "get_vars"),
         ],
     )
     @respx.mock
@@ -251,6 +256,35 @@ class TestNonNullRootDriftRaises:
     async def test_nullable_list_root_normalizes_to_empty(self, client):
         respx.post(GRAPHQL_URL).mock(return_value=_ok({"services": None}))
         assert await client.list_services() == []
+
+
+class TestUnknownEnumTolerance:
+    """#255: an enum variant absent from the schema snapshot passes through as a
+    plain string instead of raising ``ValidationError`` and failing the tool."""
+
+    @respx.mock
+    async def test_unknown_temperature_enum_passes_through(self, client):
+        metrics = {
+            "temperature": {
+                "sensors": [{"name": "Core 0", "type": "QUANTUM", "current": {"unit": "PLANCK", "status": "MELTING"}}],
+            },
+        }
+        respx.post(GRAPHQL_URL).mock(return_value=_ok({"metrics": metrics}))
+        result = await client.get_metrics()
+        assert result.temperature is not None
+        assert result.temperature.sensors is not None
+        sensor = result.temperature.sensors[0]
+        assert sensor.type == "QUANTUM"
+        assert sensor.current is not None
+        assert sensor.current.unit == "PLANCK"
+        assert sensor.current.status == "MELTING"
+
+    @respx.mock
+    async def test_unknown_registration_state_passes_through(self, client):
+        respx.post(GRAPHQL_URL).mock(return_value=_ok({"vars": {"regState": "EFUTUREVARIANT", "regTy": "QUANTUM"}}))
+        result = await client.get_vars()
+        assert result.reg_state == "EFUTUREVARIANT"
+        assert result.reg_ty == "QUANTUM"
 
 
 class TestSecurityOmissions:

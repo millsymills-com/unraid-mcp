@@ -40,9 +40,16 @@ class UnraidBaseModel(BaseModel):
     even where the schema marks them non-null (``!``). Tools select narrow
     field subsets and the API may return partial objects on degraded or
     permission-limited responses; combined with ``extra="allow"``, this keeps
-    deserialization total — a missing field yields ``None`` rather than a
-    validation error. ``Literal[...]`` is still applied to genuinely
-    enum-backed fields to constrain their values when present.
+    deserialization total against *missing* fields — they yield ``None`` rather
+    than a validation error.
+
+    Enum-backed fields are typed ``Literal[...] | str`` rather than a bare
+    ``Literal[...]``. The literal documents the known variants and surfaces them
+    to type-checkers and IDEs, while the ``| str`` arm keeps deserialization
+    total against *value* drift too: a variant from a newer Unraid build that is
+    absent from ``tests/contract/snapshot.graphql`` passes through as a plain
+    ``str`` instead of raising ``ValidationError`` and failing the whole tool
+    response (the values come from a remote server this code does not control).
     """
 
     model_config = ConfigDict(
