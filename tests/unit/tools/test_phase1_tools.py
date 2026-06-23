@@ -131,5 +131,12 @@ class TestPhase1ToolsHiddenNothing:
             "unraid_get_rclone_config",
             "unraid_get_vars",
             "unraid_list_assignable_disks",
+            "unraid_get_network",
+            "unraid_get_cloud",
+            "unraid_list_services",
+            "unraid_get_display_settings",
+            "unraid_get_api_settings",
+            "unraid_get_system_time",
+            "unraid_list_timezone_options",
         ):
             assert name in names
