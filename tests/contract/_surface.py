@@ -1,0 +1,90 @@
+"""Shared parsing of the pinned snapshot and the client's GraphQL operations.
+
+Used by the contract tests to relate what ``clients/unraid.py`` actually
+queries to what the snapshot schema exposes. No live env needed.
+"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+from typing import Any
+
+from graphql import Visitor, build_schema, parse, visit
+from graphql.language.ast import FieldNode, OperationDefinitionNode
+
+_CONTRACT_DIR = Path(__file__).parent
+SNAPSHOT_PATH = _CONTRACT_DIR / "snapshot.graphql"
+CLIENT_PATH = _CONTRACT_DIR.parents[1] / "src/unraid_mcp/clients/unraid.py"
+
+_ROOT_LABELS = ("Query", "Mutation", "Subscription")
+
+
+def query_strings() -> list[tuple[str, str]]:
+    """Return ``[(name, body)]`` for every ``QUERY_*``/``MUTATION_*`` constant."""
+    text = CLIENT_PATH.read_text(encoding="utf-8")
+    pattern = re.compile(r'((?:QUERY|MUTATION)_\w+)\s*=\s*"""(.*?)"""', re.DOTALL)
+    return pattern.findall(text)
+
+
+class _FieldCollector(Visitor):
+    def __init__(self) -> None:
+        super().__init__()
+        self.names: set[str] = set()
+
+    def enter(self, node: Any, *_: Any) -> None:
+        if isinstance(node, FieldNode):
+            self.names.add(node.name.value)
+
+
+def referenced_field_names(query_body: str) -> set[str]:
+    """Every field name selected anywhere in one operation body."""
+    collector = _FieldCollector()
+    visit(parse(query_body), collector)
+    return collector.names
+
+
+def all_referenced_field_names() -> set[str]:
+    """Every field name selected across all client operations."""
+    names: set[str] = set()
+    for _, body in query_strings():
+        names |= referenced_field_names(body)
+    return names
+
+
+def invoked_root_fields() -> set[str]:
+    """Top-level selection field names across all client operations.
+
+    Only direct children of each operation's selection set — i.e. the actual
+    ``Query``/``Mutation`` root fields the client invokes. Nested selections
+    are excluded so a root field is never falsely counted as covered because
+    a deeper field happens to share its name.
+    """
+    names: set[str] = set()
+    for _, body in query_strings():
+        for definition in parse(body).definitions:
+            if isinstance(definition, OperationDefinitionNode):
+                names |= {
+                    selection.name.value
+                    for selection in definition.selection_set.selections
+                    if isinstance(selection, FieldNode)
+                }
+    return names
+
+
+def schema_field_names(sdl: str) -> set[str]:
+    """Every field name on every object/interface type in the schema."""
+    schema = build_schema(sdl)
+    names: set[str] = set()
+    for type_ in schema.type_map.values():
+        fields = getattr(type_, "fields", None)
+        if fields:
+            names.update(fields.keys())
+    return names
+
+
+def root_field_names(sdl: str) -> dict[str, set[str]]:
+    """Map ``Query``/``Mutation``/``Subscription`` to their root field names."""
+    schema = build_schema(sdl)
+    roots = (schema.query_type, schema.mutation_type, schema.subscription_type)
+    return {label: set(root.fields) if root else set() for label, root in zip(_ROOT_LABELS, roots, strict=True)}
