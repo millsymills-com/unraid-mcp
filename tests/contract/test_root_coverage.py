@@ -20,7 +20,12 @@ from __future__ import annotations
 
 import pytest
 
-from tests.contract._surface import SNAPSHOT_PATH, invoked_root_fields, root_field_names
+from tests.contract._surface import (
+    SNAPSHOT_PATH,
+    classify_coverage,
+    invoked_root_fields,
+    root_field_names,
+)
 
 pytestmark = pytest.mark.contract
 
@@ -209,13 +214,11 @@ def test_no_unaccounted_root_fields(
     root_label: str, snapshot_roots: dict[str, set[str]], invoked: dict[str, set[str]]
 ) -> None:
     """Every root field is covered by a tool or explicitly declined."""
-    fields = snapshot_roots[root_label]
-    uncovered = fields - invoked[root_label]
-    unaccounted = uncovered - _declined(root_label)
+    unaccounted = classify_coverage(snapshot_roots[root_label], invoked[root_label], _declined(root_label)).unaccounted
 
     assert not unaccounted, (
         f"{len(unaccounted)} new {root_label} root field(s) have no tool and no "
-        f"'won't cover' entry: {sorted(unaccounted)}.\n"
+        f"'won't cover' entry: {unaccounted}.\n"
         "Either add a tool in src/unraid_mcp/tools/ (and a client operation), or "
         f"record them under INTENTIONALLY_UNCOVERED['{root_label}'] in this file "
         "with a rationale. Update docs/coverage-matrix.md to match."
@@ -227,19 +230,17 @@ def test_registry_has_no_stale_entries(
     root_label: str, snapshot_roots: dict[str, set[str]], invoked: dict[str, set[str]]
 ) -> None:
     """Declined entries must still exist and must still be uncovered."""
-    fields = snapshot_roots[root_label]
-    declined = _declined(root_label)
+    violations = classify_coverage(snapshot_roots[root_label], invoked[root_label], _declined(root_label))
 
-    now_covered = sorted(declined & invoked[root_label])
-    assert not now_covered, (
-        f"{root_label} field(s) {now_covered} are listed as intentionally uncovered "
-        "but a tool now invokes them. Remove them from INTENTIONALLY_UNCOVERED."
+    assert not violations.now_covered, (
+        f"{root_label} field(s) {violations.now_covered} are listed as intentionally "
+        "uncovered but a tool now invokes them. Remove them from INTENTIONALLY_UNCOVERED."
     )
 
-    phantom = sorted(declined - fields)
-    assert not phantom, (
-        f"{root_label} field(s) {phantom} are listed as intentionally uncovered but "
-        "no longer exist in the snapshot. Drop them from INTENTIONALLY_UNCOVERED."
+    assert not violations.phantom, (
+        f"{root_label} field(s) {violations.phantom} are listed as intentionally "
+        "uncovered but no longer exist in the snapshot. Drop them from "
+        "INTENTIONALLY_UNCOVERED."
     )
 
 
