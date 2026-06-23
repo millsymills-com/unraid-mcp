@@ -892,6 +892,15 @@ class TestGetContainer:
         assert result.id == "abc"
 
     @respx.mock
+    async def test_null_docker_root_raises_via_fallback(self, client):
+        # A null ``docker`` root from the singular query isn't a dict, so the
+        # method falls back to list_containers, which raises the non-null-root
+        # contract violation (#267) rather than reporting "not found".
+        respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"docker": None}}))
+        with pytest.raises(UnraidError, match="docker"):
+            await client.get_container("abc")
+
+    @respx.mock
     async def test_not_found_raises_unraid_not_found(self, client):
         responses = iter(
             [
