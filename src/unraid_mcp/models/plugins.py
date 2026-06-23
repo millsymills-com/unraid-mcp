@@ -29,7 +29,7 @@ class PluginInstallOperation(UnraidBaseModel):
     id: str | None = None
     url: str | None = None
     name: str | None = None
-    status: PluginInstallStatus | None = None
+    status: PluginInstallStatus | str | None = None
     created_at: str | None = None
     updated_at: str | None = None
     finished_at: str | None = None

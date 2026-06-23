@@ -1014,12 +1014,12 @@ class UnraidClient(BaseGraphQLClient):
     async def get_info(self) -> SystemInfo:
         """Get system information (OS, CPU, memory, baseboard, versions)."""
         result = await self.query(QUERY_INFO)
-        return SystemInfo.model_validate(_require_dict(result, "info"))
+        return SystemInfo.model_validate(_require_dict(result, "info", allow_null=False))
 
     async def get_array(self) -> ArrayState:
         """Get array status, capacity, parity, disks, and caches."""
         result = await self.query(QUERY_ARRAY)
-        return ArrayState.model_validate(_require_dict(result, "array"))
+        return ArrayState.model_validate(_require_dict(result, "array", allow_null=False))
 
     async def get_parity_history(self) -> list[ParityHistoryEntry]:
         """Get parity check history."""
@@ -1146,7 +1146,7 @@ class UnraidClient(BaseGraphQLClient):
         ``Vms.domain``.
         """
         result = await self.query(QUERY_VMS)
-        return Vms.model_validate(_require_dict(result, "vms"))
+        return Vms.model_validate(_require_dict(result, "vms", allow_null=False))
 
     async def list_shares(self) -> list[Share]:
         """List user shares."""
@@ -1175,7 +1175,7 @@ class UnraidClient(BaseGraphQLClient):
         single ``UserAccount`` matching the API key in use.
         """
         result = await self.query(QUERY_ME)
-        return User.model_validate(_require_dict(result, "me"))
+        return User.model_validate(_require_dict(result, "me", allow_null=False))
 
     async def list_notifications(
         self,
@@ -1198,7 +1198,7 @@ class UnraidClient(BaseGraphQLClient):
             QUERY_NOTIFICATIONS,
             variables={"type": notification_type, "limit": limit, "offset": offset},
         )
-        notifications = _require_dict(result, "notifications")
+        notifications = _require_dict(result, "notifications", allow_null=False)
         entries = notifications.get("list")
         if entries is None:
             return []
@@ -1211,7 +1211,7 @@ class UnraidClient(BaseGraphQLClient):
     async def get_flash(self) -> dict[str, Any]:
         """Get Unraid USB flash drive metadata."""
         result = await self.query(QUERY_FLASH)
-        return _require_dict(result, "flash")
+        return _require_dict(result, "flash", allow_null=False)
 
     async def get_registration(self) -> dict[str, Any]:
         """Get Unraid registration info (license type, expiration)."""
@@ -1227,7 +1227,7 @@ class UnraidClient(BaseGraphQLClient):
         key.
         """
         result = await self.query(QUERY_CONNECT)
-        connect = _require_dict(result, "connect")
+        connect = _require_dict(result, "connect", allow_null=False)
         remote_access = result.get("remoteAccess") or {}
         return {**connect, "remoteAccess": remote_access}
 
@@ -1323,7 +1323,7 @@ class UnraidClient(BaseGraphQLClient):
             QUERY_LOG_FILE,
             variables={"path": path, "lines": lines, "startLine": start_line},
         )
-        return LogFileContent.model_validate(_require_dict(result, "logFile"))
+        return LogFileContent.model_validate(_require_dict(result, "logFile", allow_null=False))
 
     # ── Read methods: OIDC / SSO ────────────────────────────────────────
 

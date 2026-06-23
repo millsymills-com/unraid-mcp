@@ -73,12 +73,12 @@ The suite is layered. Each layer catches a distinct class of bugs.
 
 ### Live-write asset setup (one-time)
 
-Live write tests need throwaway assets named with the `mcptest-` prefix:
-
-- A Docker container: Unraid UI → Docker → Add Container, image `nginx:alpine`, name `mcptest-nginx`.
-- A VM: Unraid UI → VMs → Add VM, minimal config, name `mcptest-vm`.
-
-Tests discover them by prefix and skip cleanly if absent. They will start/stop/pause/restart/reboot but never delete these assets.
+Live write tests need throwaway assets named with the `mcptest-` prefix (a
+`mcptest-nginx` container, a `mcptest-vm` VM, and seeded `mcptest-*`
+notifications). Tests discover them by prefix and skip cleanly if absent; they
+start/stop/pause/restart/reboot but never delete these assets. Full
+step-by-step provisioning, verification, and teardown commands are in
+[`docs/runbooks/live-write-assets.md`](docs/runbooks/live-write-assets.md).
 
 ## Commits and PRs
 
