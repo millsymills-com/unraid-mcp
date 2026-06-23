@@ -319,6 +319,11 @@ class TestSecurityOmissions:
         assert "parameters" not in unraid_module.QUERY_RCLONE_CONFIG
         assert "config" not in unraid_module.QUERY_RCLONE_CONFIG
 
+    def test_rclone_query_omits_null_prone_drives(self):
+        # #261: the server returns null for the non-null ``drives`` field,
+        # failing the whole rclone read; it must never be selected.
+        assert "drives" not in unraid_module.QUERY_RCLONE_CONFIG
+
     def test_display_query_omits_base64(self):
         assert "base64" not in unraid_module.QUERY_DISPLAY
 
