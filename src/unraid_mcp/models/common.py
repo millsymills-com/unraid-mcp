@@ -35,6 +35,14 @@ class UnraidBaseModel(BaseModel):
       declare Python-idiomatic snake_case fields that map onto the GraphQL
       API's camelCase shape (``num_reads`` ↔ ``numReads``) while still
       accepting either form in tests.
+
+    Optional policy — fields are blanket-``Optional[...] = None`` on purpose,
+    even where the schema marks them non-null (``!``). Tools select narrow
+    field subsets and the API may return partial objects on degraded or
+    permission-limited responses; combined with ``extra="allow"``, this keeps
+    deserialization total — a missing field yields ``None`` rather than a
+    validation error. ``Literal[...]`` is still applied to genuinely
+    enum-backed fields to constrain their values when present.
     """
 
     model_config = ConfigDict(
