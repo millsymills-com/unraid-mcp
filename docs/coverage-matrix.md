@@ -7,10 +7,13 @@ Precise mapping of `unraid-mcp` tools to the Unraid GraphQL API surface.
 - **Tools source:** `src/unraid_mcp/tools/` (36 domain tools: 16 read, 20 write).
 - **Legend:** ✓ covered · ◐ partial (namespace reached, some leaves missing) ·
   ✗ not implemented.
-- **Enforced by** `tests/contract/test_root_coverage.py`: every root field must be
-  reachable by a tool or listed in that test's `INTENTIONALLY_UNCOVERED` registry.
-  A new schema root field with neither fails CI. Keep this doc and that registry
-  in step.
+- **Enforced by** `tests/contract/test_root_coverage.py`: every **root** field
+  must be invoked by a `QUERY_*`/`MUTATION_*` client operation constant or listed
+  in that test's `INTENTIONALLY_UNCOVERED` registry. A new schema root field with
+  neither fails CI. The ratchet guards root fields only — leaf-op coverage in the
+  tables below (e.g. `docker` 4/9) is descriptive; the leaf contract lives in
+  `SCHEMA_EXPECTATIONS` in `clients/unraid.py`, checked by the drift tests. Keep
+  this doc and that registry in step.
 
 ## Headline numbers
 
