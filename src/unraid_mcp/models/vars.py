@@ -6,7 +6,42 @@ session secret and is deliberately never modeled or selected (PROTO-012).
 
 from __future__ import annotations
 
+from typing import Literal
+
 from unraid_mcp.models.common import UnraidBaseModel
+
+RegistrationState = Literal[
+    "TRIAL",
+    "BASIC",
+    "PLUS",
+    "PRO",
+    "STARTER",
+    "UNLEASHED",
+    "LIFETIME",
+    "EEXPIRED",
+    "EGUID",
+    "EGUID1",
+    "ETRIAL",
+    "ENOKEYFILE",
+    "ENOKEYFILE1",
+    "ENOKEYFILE2",
+    "ENOFLASH",
+    "ENOFLASH1",
+    "ENOFLASH2",
+    "ENOFLASH3",
+    "ENOFLASH4",
+    "ENOFLASH5",
+    "ENOFLASH6",
+    "ENOFLASH7",
+    "EBLACKLISTED",
+    "EBLACKLISTED1",
+    "EBLACKLISTED2",
+    "ENOCONN",
+]
+"""``RegistrationState`` enum (26 variants)."""
+
+RegistrationType = Literal["BASIC", "PLUS", "PRO", "STARTER", "UNLEASHED", "LIFETIME", "INVALID", "TRIAL"]
+"""``registrationType`` enum."""
 
 
 class Vars(UnraidBaseModel):
@@ -46,8 +81,8 @@ class Vars(UnraidBaseModel):
     md_num_disks: int | None = None
     md_state: str | None = None
     fs_state: str | None = None
-    reg_state: str | None = None
-    reg_ty: str | None = None
+    reg_state: RegistrationState | None = None
+    reg_ty: RegistrationType | None = None
     flash_product: str | None = None
     flash_vendor: str | None = None
     config_valid: bool | None = None

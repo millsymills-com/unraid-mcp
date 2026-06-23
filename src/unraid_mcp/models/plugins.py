@@ -6,7 +6,12 @@ Mirrors ``Query.plugins`` / ``pluginInstallOperations`` /
 
 from __future__ import annotations
 
+from typing import Literal
+
 from unraid_mcp.models.common import UnraidBaseModel
+
+PluginInstallStatus = Literal["FAILED", "QUEUED", "RUNNING", "SUCCEEDED"]
+"""``PluginInstallStatus`` enum."""
 
 
 class Plugin(UnraidBaseModel):
@@ -24,7 +29,7 @@ class PluginInstallOperation(UnraidBaseModel):
     id: str | None = None
     url: str | None = None
     name: str | None = None
-    status: str | None = None
+    status: PluginInstallStatus | None = None
     created_at: str | None = None
     updated_at: str | None = None
     finished_at: str | None = None

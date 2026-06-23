@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from unraid_mcp.models.common import UnraidBaseModel
+
+AccessUrlType = Literal["LAN", "WIREGUARD", "WAN", "MDNS", "OTHER", "DEFAULT"]
+"""``URL_TYPE`` enum."""
+
+MinigraphStatus = Literal["PRE_INIT", "CONNECTING", "CONNECTED", "PING_FAILURE", "ERROR_RETRYING"]
+"""``MinigraphStatus`` enum."""
 
 
 class AccessUrl(UnraidBaseModel):
     """A single network access URL (LAN / WAN / etc.)."""
 
-    type: str | None = None
+    type: AccessUrlType | None = None
     name: str | None = None
     ipv4: str | None = None
     ipv6: str | None = None
@@ -39,7 +47,7 @@ class RelayHealth(UnraidBaseModel):
 class MinigraphHealth(UnraidBaseModel):
     """Mini-GraphQL link health."""
 
-    status: str | None = None
+    status: MinigraphStatus | None = None
     timeout: int | None = None
     error: str | None = None
 

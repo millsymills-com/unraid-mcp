@@ -8,7 +8,29 @@ belongs to the streaming subscription, not the snapshot tool.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from unraid_mcp.models.common import BigInt, UnraidBaseModel
+
+TemperatureUnit = Literal["CELSIUS", "FAHRENHEIT", "KELVIN", "RANKINE"]
+"""``TemperatureUnit`` enum."""
+
+TemperatureStatus = Literal["NORMAL", "WARNING", "CRITICAL", "UNKNOWN"]
+"""``TemperatureStatus`` enum."""
+
+SensorType = Literal[
+    "CPU_PACKAGE",
+    "CPU_CORE",
+    "MOTHERBOARD",
+    "CHIPSET",
+    "GPU",
+    "DISK",
+    "NVME",
+    "AMBIENT",
+    "VRM",
+    "CUSTOM",
+]
+"""``SensorType`` enum."""
 
 
 class CpuLoad(UnraidBaseModel):
@@ -44,9 +66,9 @@ class TemperatureReading(UnraidBaseModel):
     """A single temperature value with unit and status."""
 
     value: float | None = None
-    unit: str | None = None
+    unit: TemperatureUnit | None = None
     timestamp: str | None = None
-    status: str | None = None
+    status: TemperatureStatus | None = None
 
 
 class TemperatureSensor(UnraidBaseModel):
@@ -57,7 +79,7 @@ class TemperatureSensor(UnraidBaseModel):
     """
 
     name: str | None = None
-    type: str | None = None
+    type: SensorType | None = None
     location: str | None = None
     current: TemperatureReading | None = None
     min: TemperatureReading | None = None
