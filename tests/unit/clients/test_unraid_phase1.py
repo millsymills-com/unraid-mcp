@@ -239,6 +239,18 @@ class TestNonNullRootDriftRaises:
             ("network", "get_network"),
             ("rclone", "get_rclone_config"),
             ("upsConfiguration", "get_ups_configuration"),
+            ("metrics", "get_metrics"),
+            ("display", "get_display_settings"),
+            ("settings", "get_api_settings"),
+            ("systemTime", "get_system_time"),
+            ("vars", "get_vars"),
+            ("info", "get_info"),
+            ("array", "get_array"),
+            ("vms", "list_vms"),
+            ("me", "get_me"),
+            ("notifications", "list_notifications"),
+            ("flash", "get_flash"),
+            ("connect", "get_connect"),
         ],
     )
     @respx.mock
@@ -248,9 +260,44 @@ class TestNonNullRootDriftRaises:
             await getattr(client, method)()
 
     @respx.mock
+    async def test_null_log_file_root_raises(self, client):
+        respx.post(GRAPHQL_URL).mock(return_value=_ok({"logFile": None}))
+        with pytest.raises(UnraidError, match="logFile"):
+            await client.read_log_file("/var/log/syslog")
+
+    @respx.mock
     async def test_nullable_list_root_normalizes_to_empty(self, client):
         respx.post(GRAPHQL_URL).mock(return_value=_ok({"services": None}))
         assert await client.list_services() == []
+
+
+class TestUnknownEnumTolerance:
+    """#255: an enum variant absent from the schema snapshot passes through as a
+    plain string instead of raising ``ValidationError`` and failing the tool."""
+
+    @respx.mock
+    async def test_unknown_temperature_enum_passes_through(self, client):
+        metrics = {
+            "temperature": {
+                "sensors": [{"name": "Core 0", "type": "QUANTUM", "current": {"unit": "PLANCK", "status": "MELTING"}}],
+            },
+        }
+        respx.post(GRAPHQL_URL).mock(return_value=_ok({"metrics": metrics}))
+        result = await client.get_metrics()
+        assert result.temperature is not None
+        assert result.temperature.sensors is not None
+        sensor = result.temperature.sensors[0]
+        assert sensor.type == "QUANTUM"
+        assert sensor.current is not None
+        assert sensor.current.unit == "PLANCK"
+        assert sensor.current.status == "MELTING"
+
+    @respx.mock
+    async def test_unknown_registration_state_passes_through(self, client):
+        respx.post(GRAPHQL_URL).mock(return_value=_ok({"vars": {"regState": "EFUTUREVARIANT", "regTy": "QUANTUM"}}))
+        result = await client.get_vars()
+        assert result.reg_state == "EFUTUREVARIANT"
+        assert result.reg_ty == "QUANTUM"
 
 
 class TestSecurityOmissions:
@@ -258,6 +305,11 @@ class TestSecurityOmissions:
 
     def test_vars_query_omits_csrf_token(self):
         assert "csrfToken" not in unraid_module.QUERY_VARS
+
+    def test_vars_query_omits_nan_prone_cache_slots(self):
+        # #260: the server emits NaN for sysCacheSlots, which fails the whole
+        # vars read; it must never be selected.
+        assert "sysCacheSlots" not in unraid_module.QUERY_VARS
 
     def test_cloud_apikey_model_has_no_key_material(self):
         assert set(ApiKeyHealth.model_fields) == {"valid", "error"}
