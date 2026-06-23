@@ -49,12 +49,12 @@ class TestGetInfo:
             await client.get_info()
 
     @respx.mock
-    async def test_get_info_normalizes_null_to_empty_dict(self, client):
-        # Present-but-null is fine — normalized to ``{}`` so model validation
-        # still works against ``SystemInfo``.
+    async def test_get_info_null_root_raises(self, client):
+        # ``info`` is schema-non-null — a present-but-null value is drift, not
+        # an empty system, so it must raise rather than fabricate ``{}``.
         respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"info": None}}))
-        result = await client.get_info()
-        assert result.os is None
+        with pytest.raises(UnraidError, match="info"):
+            await client.get_info()
 
 
 class TestGetArray:
@@ -229,9 +229,10 @@ class TestGetFlash:
             await client.get_flash()
 
     @respx.mock
-    async def test_get_flash_normalizes_null_to_empty_dict(self, client):
+    async def test_get_flash_null_root_raises(self, client):
         respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"flash": None}}))
-        assert await client.get_flash() == {}
+        with pytest.raises(UnraidError, match="flash"):
+            await client.get_flash()
 
     @respx.mock
     async def test_get_flash_query_omits_guid(self, client):

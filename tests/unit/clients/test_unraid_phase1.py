@@ -239,6 +239,13 @@ class TestNonNullRootDriftRaises:
             ("network", "get_network"),
             ("rclone", "get_rclone_config"),
             ("upsConfiguration", "get_ups_configuration"),
+            ("info", "get_info"),
+            ("array", "get_array"),
+            ("vms", "list_vms"),
+            ("me", "get_me"),
+            ("notifications", "list_notifications"),
+            ("flash", "get_flash"),
+            ("connect", "get_connect"),
         ],
     )
     @respx.mock
@@ -246,6 +253,12 @@ class TestNonNullRootDriftRaises:
         respx.post(GRAPHQL_URL).mock(return_value=_ok({key: None}))
         with pytest.raises(UnraidError, match=key):
             await getattr(client, method)()
+
+    @respx.mock
+    async def test_null_log_file_root_raises(self, client):
+        respx.post(GRAPHQL_URL).mock(return_value=_ok({"logFile": None}))
+        with pytest.raises(UnraidError, match="logFile"):
+            await client.read_log_file("/var/log/syslog")
 
     @respx.mock
     async def test_nullable_list_root_normalizes_to_empty(self, client):
