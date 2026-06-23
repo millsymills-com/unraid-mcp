@@ -259,6 +259,11 @@ class TestSecurityOmissions:
     def test_vars_query_omits_csrf_token(self):
         assert "csrfToken" not in unraid_module.QUERY_VARS
 
+    def test_vars_query_omits_nan_prone_cache_slots(self):
+        # #260: the server emits NaN for sysCacheSlots, which fails the whole
+        # vars read; it must never be selected.
+        assert "sysCacheSlots" not in unraid_module.QUERY_VARS
+
     def test_cloud_apikey_model_has_no_key_material(self):
         assert set(ApiKeyHealth.model_fields) == {"valid", "error"}
         assert "clientSecret" not in unraid_module.QUERY_CLOUD
