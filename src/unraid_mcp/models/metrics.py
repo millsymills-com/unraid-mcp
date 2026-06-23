@@ -66,9 +66,9 @@ class TemperatureReading(UnraidBaseModel):
     """A single temperature value with unit and status."""
 
     value: float | None = None
-    unit: TemperatureUnit | None = None
+    unit: TemperatureUnit | str | None = None
     timestamp: str | None = None
-    status: TemperatureStatus | None = None
+    status: TemperatureStatus | str | None = None
 
 
 class TemperatureSensor(UnraidBaseModel):
@@ -79,7 +79,7 @@ class TemperatureSensor(UnraidBaseModel):
     """
 
     name: str | None = None
-    type: SensorType | None = None
+    type: SensorType | str | None = None
     location: str | None = None
     current: TemperatureReading | None = None
     min: TemperatureReading | None = None

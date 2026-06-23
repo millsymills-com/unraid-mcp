@@ -81,8 +81,8 @@ class Vars(UnraidBaseModel):
     md_num_disks: int | None = None
     md_state: str | None = None
     fs_state: str | None = None
-    reg_state: RegistrationState | None = None
-    reg_ty: RegistrationType | None = None
+    reg_state: RegistrationState | str | None = None
+    reg_ty: RegistrationType | str | None = None
     flash_product: str | None = None
     flash_vendor: str | None = None
     config_valid: bool | None = None
