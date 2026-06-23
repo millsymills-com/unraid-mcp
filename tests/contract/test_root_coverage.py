@@ -3,8 +3,9 @@
 Every ``Query``/``Mutation``/``Subscription`` root field in
 ``tests/contract/snapshot.graphql`` must be either:
 
-  - **covered** — invoked as a top-level selection by some operation in
-    ``clients/unraid.py`` (i.e. a tool can reach it), or
+  - **covered** — invoked as a top-level selection by some ``QUERY_*``/
+    ``MUTATION_*`` operation constant in ``clients/unraid.py`` (the client
+    method a tool calls), or
   - **explicitly declined** — listed in :data:`INTENTIONALLY_UNCOVERED`
     with a rationale.
 
@@ -199,15 +200,17 @@ def snapshot_roots() -> dict[str, set[str]]:
 
 
 @pytest.fixture(scope="module")
-def invoked() -> set[str]:
+def invoked() -> dict[str, set[str]]:
     return invoked_root_fields()
 
 
 @pytest.mark.parametrize("root_label", ["Query", "Mutation", "Subscription"])
-def test_no_unaccounted_root_fields(root_label: str, snapshot_roots: dict[str, set[str]], invoked: set[str]) -> None:
+def test_no_unaccounted_root_fields(
+    root_label: str, snapshot_roots: dict[str, set[str]], invoked: dict[str, set[str]]
+) -> None:
     """Every root field is covered by a tool or explicitly declined."""
     fields = snapshot_roots[root_label]
-    uncovered = fields - invoked
+    uncovered = fields - invoked[root_label]
     unaccounted = uncovered - _declined(root_label)
 
     assert not unaccounted, (
@@ -220,12 +223,14 @@ def test_no_unaccounted_root_fields(root_label: str, snapshot_roots: dict[str, s
 
 
 @pytest.mark.parametrize("root_label", ["Query", "Mutation", "Subscription"])
-def test_registry_has_no_stale_entries(root_label: str, snapshot_roots: dict[str, set[str]], invoked: set[str]) -> None:
+def test_registry_has_no_stale_entries(
+    root_label: str, snapshot_roots: dict[str, set[str]], invoked: dict[str, set[str]]
+) -> None:
     """Declined entries must still exist and must still be uncovered."""
     fields = snapshot_roots[root_label]
     declined = _declined(root_label)
 
-    now_covered = sorted(declined & invoked)
+    now_covered = sorted(declined & invoked[root_label])
     assert not now_covered, (
         f"{root_label} field(s) {now_covered} are listed as intentionally uncovered "
         "but a tool now invokes them. Remove them from INTENTIONALLY_UNCOVERED."

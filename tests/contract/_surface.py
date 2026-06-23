@@ -11,7 +11,13 @@ from pathlib import Path
 from typing import Any
 
 from graphql import Visitor, build_schema, parse, visit
-from graphql.language.ast import FieldNode, OperationDefinitionNode
+from graphql.language.ast import FieldNode, OperationDefinitionNode, OperationType
+
+_OP_TO_LABEL = {
+    OperationType.QUERY: "Query",
+    OperationType.MUTATION: "Mutation",
+    OperationType.SUBSCRIPTION: "Subscription",
+}
 
 _CONTRACT_DIR = Path(__file__).parent
 SNAPSHOT_PATH = _CONTRACT_DIR / "snapshot.graphql"
@@ -52,24 +58,26 @@ def all_referenced_field_names() -> set[str]:
     return names
 
 
-def invoked_root_fields() -> set[str]:
-    """Top-level selection field names across all client operations.
+def invoked_root_fields() -> dict[str, set[str]]:
+    """Top-level selection field names per root type across client operations.
 
-    Only direct children of each operation's selection set — i.e. the actual
-    ``Query``/``Mutation`` root fields the client invokes. Nested selections
-    are excluded so a root field is never falsely counted as covered because
-    a deeper field happens to share its name.
+    Keyed by ``Query``/``Mutation``/``Subscription``. Only direct children of
+    each operation's selection set — the actual root fields the client invokes.
+    Nested selections are excluded so a root field is never falsely counted as
+    covered because a deeper field happens to share its name. Splitting by root
+    prevents a read-side name (e.g. ``Query.docker``) from masking lost
+    write-side coverage of a same-named ``Mutation`` field.
     """
-    names: set[str] = set()
+    by_root: dict[str, set[str]] = {label: set() for label in _ROOT_LABELS}
     for _, body in query_strings():
         for definition in parse(body).definitions:
             if isinstance(definition, OperationDefinitionNode):
-                names |= {
+                by_root[_OP_TO_LABEL[definition.operation]] |= {
                     selection.name.value
                     for selection in definition.selection_set.selections
                     if isinstance(selection, FieldNode)
                 }
-    return names
+    return by_root
 
 
 def schema_field_names(sdl: str) -> set[str]:
