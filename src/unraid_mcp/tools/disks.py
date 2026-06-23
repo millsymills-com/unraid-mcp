@@ -37,3 +37,16 @@ def register_disk_tools(mcp: FastMCP) -> None:
         """
         client = require_client(ctx)
         return await client.get_disk(disk_id)
+
+    @unraid_tool(mcp, tags={"disks"})
+    async def unraid_list_assignable_disks(ctx: Context) -> list[Disk]:
+        """List disks eligible for assignment to the array.
+
+        Args:
+            ctx: FastMCP request context.
+
+        Returns:
+            List of ``Disk`` models for unassigned/assignable disks.
+        """
+        client = require_client(ctx)
+        return await client.list_assignable_disks()

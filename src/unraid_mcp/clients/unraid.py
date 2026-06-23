@@ -26,10 +26,20 @@ from unraid_mcp.errors import UnraidConnectionError, UnraidError, UnraidNotFound
 from unraid_mcp.models.array import ArrayState, ParityHistoryEntry
 from unraid_mcp.models.disks import Disk
 from unraid_mcp.models.docker import DockerContainer, DockerNetwork
+from unraid_mcp.models.logs import LogFile, LogFileContent
+from unraid_mcp.models.metrics import Metrics
+from unraid_mcp.models.network import Cloud, Network
 from unraid_mcp.models.notifications import Notification, NotificationImportance, NotificationType
+from unraid_mcp.models.oidc import PublicOidcProvider
+from unraid_mcp.models.plugins import Plugin, PluginInstallOperation
+from unraid_mcp.models.rclone import RCloneConfig
+from unraid_mcp.models.settings import ApiSettings, DisplaySettings, Service
 from unraid_mcp.models.shares import Share
 from unraid_mcp.models.system import SystemInfo
+from unraid_mcp.models.system_time import SystemTime, TimeZoneOption
+from unraid_mcp.models.ups import UPSConfiguration, UPSDevice
 from unraid_mcp.models.users import User
+from unraid_mcp.models.vars import Vars
 from unraid_mcp.models.vms import Vms
 
 logger = logging.getLogger(__name__)
@@ -243,6 +253,228 @@ query Connect {
 }
 """
 
+# System metrics snapshot (CPU / memory / temperature).
+# ``cpu``/``memory``/``temperature`` are all nullable. ``temperature.sensors``
+# is selected without ``history`` — that array is unbounded and belongs to the
+# streaming subscription, not this snapshot. Keep aligned with
+# SCHEMA_EXPECTATIONS["Metrics"] / ["CpuUtilization"] / ["MemoryUtilization"] /
+# ["TemperatureMetrics"] / ["TemperatureSensor"] / ["TemperatureSummary"].
+QUERY_METRICS = """
+query Metrics {
+    metrics {
+        cpu { percentTotal cpus { percentTotal } }
+        memory {
+            total used free available active buffcache percentTotal
+            swapTotal swapUsed swapFree percentSwapTotal
+        }
+        temperature {
+            summary {
+                average warningCount criticalCount
+                hottest { name type location current { value unit status } }
+                coolest { name type location current { value unit status } }
+            }
+            sensors {
+                name type location warning critical
+                current { value unit status }
+                min { value unit status }
+                max { value unit status }
+            }
+        }
+    }
+}
+"""
+
+# UPS device roster, single device lookup, and monitoring configuration.
+QUERY_UPS_DEVICES = """
+query UpsDevices {
+    upsDevices {
+        id name model status
+        battery { chargeLevel estimatedRuntime health }
+        power { inputVoltage outputVoltage loadPercentage nominalPower currentPower }
+    }
+}
+"""
+
+# Single UPS device by ID (nullable — null when no match).
+QUERY_UPS_DEVICE_BY_ID = """
+query UpsDeviceById($id: String!) {
+    upsDeviceById(id: $id) {
+        id name model status
+        battery { chargeLevel estimatedRuntime health }
+        power { inputVoltage outputVoltage loadPercentage nominalPower currentPower }
+    }
+}
+"""
+
+# UPS monitoring configuration (apcupsd-style settings).
+QUERY_UPS_CONFIGURATION = """
+query UpsConfiguration {
+    upsConfiguration {
+        service upsCable customUpsCable upsType device overrideUpsCapacity
+        batteryLevel minutes timeout killUps nisIp netServer upsName modelName
+    }
+}
+"""
+
+# Installed plugin inventory with metadata.
+QUERY_PLUGINS = """
+query Plugins {
+    plugins { name version hasApiModule hasCliModule }
+}
+"""
+
+# Installed Unraid OS plugins by .plg filename (list of strings).
+QUERY_INSTALLED_UNRAID_PLUGINS = """
+query InstalledUnraidPlugins { installedUnraidPlugins }
+"""
+
+# Tracked plugin install operations.
+QUERY_PLUGIN_INSTALL_OPERATIONS = """
+query PluginInstallOperations {
+    pluginInstallOperations { id url name status createdAt updatedAt finishedAt output }
+}
+"""
+
+# Single plugin install operation by id (nullable).
+QUERY_PLUGIN_INSTALL_OPERATION = """
+query PluginInstallOperation($operationId: ID!) {
+    pluginInstallOperation(operationId: $operationId) {
+        id url name status createdAt updatedAt finishedAt output
+    }
+}
+"""
+
+# Available log files (name / path / size / mtime).
+QUERY_LOG_FILES = """
+query LogFiles {
+    logFiles { name path size modifiedAt }
+}
+"""
+
+# Log file contents with optional paging (lines / startLine).
+QUERY_LOG_FILE = """
+query LogFile($path: String!, $lines: Int, $startLine: Int) {
+    logFile(path: $path, lines: $lines, startLine: $startLine) {
+        path content totalLines startLine
+    }
+}
+"""
+
+# Whether single-sign-on is enabled (boolean).
+QUERY_SSO_STATUS = """
+query SsoStatus { isSSOEnabled }
+"""
+
+# Public OIDC providers for login buttons. Secret-free projection — never
+# select ``OidcProvider`` (it carries ``clientSecret``).
+QUERY_PUBLIC_OIDC_PROVIDERS = """
+query PublicOidcProviders {
+    publicOidcProviders { id name buttonText buttonIcon buttonVariant buttonStyle }
+}
+"""
+
+# Network access URLs.
+QUERY_NETWORK = """
+query Network {
+    network { id accessUrls { type name ipv4 ipv6 } }
+}
+"""
+
+# Unraid Connect cloud health. ``apiKey`` is reduced to ``{valid error}`` —
+# the key material itself is never selected (PROTO-012).
+QUERY_CLOUD = """
+query Cloud {
+    cloud {
+        error
+        apiKey { valid error }
+        relay { status timeout error }
+        minigraphql { status timeout error }
+        cloud { status ip error }
+        allowedOrigins
+    }
+}
+"""
+
+# Background services roster.
+QUERY_SERVICES = """
+query Services {
+    services { id name online uptime { timestamp } version }
+}
+"""
+
+# Display settings. ``case.base64`` is intentionally not selected — it is a
+# large image blob with no agent value (default-omit per plan §3).
+QUERY_DISPLAY = """
+query Display {
+    display {
+        id
+        case { url icon error }
+        theme unit scale tabs resize wwn total usage text
+        warning critical hot max locale
+    }
+}
+"""
+
+# API settings (``settings.api`` branch only — skip the ``unified``/``sso``
+# JSON form blobs).
+QUERY_API_SETTINGS = """
+query ApiSettings {
+    settings { id api { version extraOrigins sandbox plugins } }
+}
+"""
+
+# Current system time configuration.
+QUERY_SYSTEM_TIME = """
+query SystemTime {
+    systemTime { currentTime timeZone useNtp ntpServers }
+}
+"""
+
+# Available IANA timezone options.
+QUERY_TIMEZONE_OPTIONS = """
+query TimeZoneOptions {
+    timeZoneOptions { value label }
+}
+"""
+
+# Curated Unraid system variables. ``csrfToken`` is intentionally never
+# selected (PROTO-012) — it is a session secret.
+QUERY_VARS = """
+query Vars {
+    vars {
+        id version name timeZone comment workgroup domain
+        sysModel sysArraySlots sysCacheSlots sysFlashSlots
+        useSsl port portssl useSsh portssh useTelnet useNtp
+        ntpServer1 ntpServer2 ntpServer3 ntpServer4
+        startArray spindownDelay defaultFormat defaultFsType
+        shareCount shareSmbCount shareNfsCount shareAfpCount
+        deviceCount mdNumDisks mdState fsState regState regTy
+        flashProduct flashVendor configValid safeMode
+    }
+}
+"""
+
+# Disks eligible for assignment to the array (reuses the Disk field set).
+QUERY_ASSIGNABLE_DISKS = """
+query AssignableDisks {
+    assignableDisks {
+        id name device type vendor size temperature interfaceType serialNum smartStatus isSpinning
+    }
+}
+"""
+
+# Rclone backup configuration. ``RCloneRemote.parameters``/``config`` are JSON
+# blobs that may carry cloud credentials and are deliberately NOT selected
+# (PROTO-012). ``configForm`` is skipped (UI form schema, no agent value).
+QUERY_RCLONE_CONFIG = """
+query RcloneConfig {
+    rclone {
+        remotes { name type }
+        drives { name }
+    }
+}
+"""
+
 
 # ── Mutations ───────────────────────────────────────────────────────────
 
@@ -426,6 +658,28 @@ SCHEMA_EXPECTATIONS: dict[str, frozenset[str]] = {
             "connect",
             "remoteAccess",
             "parityHistory",
+            "metrics",
+            "upsDevices",
+            "upsDeviceById",
+            "upsConfiguration",
+            "plugins",
+            "installedUnraidPlugins",
+            "pluginInstallOperations",
+            "pluginInstallOperation",
+            "logFiles",
+            "logFile",
+            "isSSOEnabled",
+            "publicOidcProviders",
+            "network",
+            "cloud",
+            "services",
+            "display",
+            "settings",
+            "systemTime",
+            "timeZoneOptions",
+            "vars",
+            "assignableDisks",
+            "rclone",
         },
     ),
     "Mutation": frozenset(
@@ -506,6 +760,144 @@ SCHEMA_EXPECTATIONS: dict[str, frozenset[str]] = {
     "InfoVersions": frozenset({"id", "core", "packages"}),
     "CoreVersions": frozenset({"unraid", "kernel", "api"}),
     "PackageVersions": frozenset({"openssl", "docker", "node", "npm", "nginx", "php", "git", "pm2"}),
+    # ── Phase-1 read-coverage leaf types ────────────────────────────────
+    "Metrics": frozenset({"cpu", "memory", "temperature"}),
+    "CpuUtilization": frozenset({"percentTotal", "cpus"}),
+    "CpuLoad": frozenset({"percentTotal"}),
+    "MemoryUtilization": frozenset(
+        {
+            "total",
+            "used",
+            "free",
+            "available",
+            "active",
+            "buffcache",
+            "percentTotal",
+            "swapTotal",
+            "swapUsed",
+            "swapFree",
+            "percentSwapTotal",
+        },
+    ),
+    "TemperatureMetrics": frozenset({"sensors", "summary"}),
+    "TemperatureSummary": frozenset({"average", "hottest", "coolest", "warningCount", "criticalCount"}),
+    "TemperatureSensor": frozenset(
+        {"name", "type", "location", "current", "min", "max", "warning", "critical"},
+    ),
+    "TemperatureReading": frozenset({"value", "unit", "status"}),
+    "UPSDevice": frozenset({"id", "name", "model", "status", "battery", "power"}),
+    "UPSBattery": frozenset({"chargeLevel", "estimatedRuntime", "health"}),
+    "UPSPower": frozenset(
+        {"inputVoltage", "outputVoltage", "loadPercentage", "nominalPower", "currentPower"},
+    ),
+    "UPSConfiguration": frozenset(
+        {
+            "service",
+            "upsCable",
+            "customUpsCable",
+            "upsType",
+            "device",
+            "overrideUpsCapacity",
+            "batteryLevel",
+            "minutes",
+            "timeout",
+            "killUps",
+            "nisIp",
+            "netServer",
+            "upsName",
+            "modelName",
+        },
+    ),
+    "Plugin": frozenset({"name", "version", "hasApiModule", "hasCliModule"}),
+    "PluginInstallOperation": frozenset(
+        {"id", "url", "name", "status", "createdAt", "updatedAt", "finishedAt", "output"},
+    ),
+    "LogFile": frozenset({"name", "path", "size", "modifiedAt"}),
+    "LogFileContent": frozenset({"path", "content", "totalLines", "startLine"}),
+    "PublicOidcProvider": frozenset(
+        {"id", "name", "buttonText", "buttonIcon", "buttonVariant", "buttonStyle"},
+    ),
+    "Network": frozenset({"id", "accessUrls"}),
+    "AccessUrl": frozenset({"type", "name", "ipv4", "ipv6"}),
+    "Cloud": frozenset({"error", "apiKey", "relay", "minigraphql", "cloud", "allowedOrigins"}),
+    "ApiKeyResponse": frozenset({"valid", "error"}),
+    "RelayResponse": frozenset({"status", "timeout", "error"}),
+    "MinigraphqlResponse": frozenset({"status", "timeout", "error"}),
+    "CloudResponse": frozenset({"status", "ip", "error"}),
+    "Service": frozenset({"id", "name", "online", "uptime", "version"}),
+    "Uptime": frozenset({"timestamp"}),
+    "InfoDisplay": frozenset(
+        {
+            "id",
+            "case",
+            "theme",
+            "unit",
+            "scale",
+            "tabs",
+            "resize",
+            "wwn",
+            "total",
+            "usage",
+            "text",
+            "warning",
+            "critical",
+            "hot",
+            "max",
+            "locale",
+        },
+    ),
+    "InfoDisplayCase": frozenset({"url", "icon", "error"}),
+    "Settings": frozenset({"id", "api"}),
+    "ApiConfig": frozenset({"version", "extraOrigins", "sandbox", "plugins"}),
+    "SystemTime": frozenset({"currentTime", "timeZone", "useNtp", "ntpServers"}),
+    "TimeZoneOption": frozenset({"value", "label"}),
+    "Vars": frozenset(
+        {
+            "id",
+            "version",
+            "name",
+            "timeZone",
+            "comment",
+            "workgroup",
+            "domain",
+            "sysModel",
+            "sysArraySlots",
+            "sysCacheSlots",
+            "sysFlashSlots",
+            "useSsl",
+            "port",
+            "portssl",
+            "useSsh",
+            "portssh",
+            "useTelnet",
+            "useNtp",
+            "ntpServer1",
+            "ntpServer2",
+            "ntpServer3",
+            "ntpServer4",
+            "startArray",
+            "spindownDelay",
+            "defaultFormat",
+            "defaultFsType",
+            "shareCount",
+            "shareSmbCount",
+            "shareNfsCount",
+            "shareAfpCount",
+            "deviceCount",
+            "mdNumDisks",
+            "mdState",
+            "fsState",
+            "regState",
+            "regTy",
+            "flashProduct",
+            "flashVendor",
+            "configValid",
+            "safeMode",
+        },
+    ),
+    "RCloneBackupSettings": frozenset({"remotes", "drives"}),
+    "RCloneRemote": frozenset({"name", "type"}),
+    "RCloneDrive": frozenset({"name"}),
 }
 
 
@@ -821,6 +1213,179 @@ class UnraidClient(BaseGraphQLClient):
         connect = _require_dict(result, "connect")
         remote_access = result.get("remoteAccess") or {}
         return {**connect, "remoteAccess": remote_access}
+
+    # ── Read methods: metrics ───────────────────────────────────────────
+
+    async def get_metrics(self) -> Metrics:
+        """Get the current CPU / memory / temperature metrics snapshot.
+
+        The unbounded ``temperature.sensors[].history`` array is not selected —
+        it belongs to the streaming subscription, not this snapshot.
+        """
+        result = await self.query(QUERY_METRICS)
+        return Metrics.model_validate(_require_dict(result, "metrics"))
+
+    # ── Read methods: UPS ───────────────────────────────────────────────
+
+    async def list_ups_devices(self) -> list[UPSDevice]:
+        """List all monitored UPS devices."""
+        result = await self.query(QUERY_UPS_DEVICES)
+        return [UPSDevice.model_validate(d) for d in _require_list(result, "upsDevices")]
+
+    async def get_ups_device(self, device_id: str) -> UPSDevice:
+        """Get a single UPS device by ID.
+
+        Raises:
+            UnraidNotFoundError: when no device matches ``device_id``.
+        """
+        result = await self.query(QUERY_UPS_DEVICE_BY_ID, variables={"id": device_id})
+        device = result.get("upsDeviceById")
+        if device is None:
+            raise UnraidNotFoundError(f"UPS device with id '{device_id}' not found")
+        if not isinstance(device, dict):
+            raise UnraidError(f"Expected dict for 'upsDeviceById', got {type(device).__name__}")
+        return UPSDevice.model_validate(device)
+
+    async def get_ups_configuration(self) -> UPSConfiguration:
+        """Get the UPS monitoring service configuration."""
+        result = await self.query(QUERY_UPS_CONFIGURATION)
+        return UPSConfiguration.model_validate(_require_dict(result, "upsConfiguration"))
+
+    # ── Read methods: plugins ───────────────────────────────────────────
+
+    async def list_plugins(self) -> list[Plugin]:
+        """List all installed plugins with their metadata."""
+        result = await self.query(QUERY_PLUGINS)
+        return [Plugin.model_validate(p) for p in _require_list(result, "plugins")]
+
+    async def list_installed_unraid_plugins(self) -> list[str]:
+        """List installed Unraid OS plugins by ``.plg`` filename."""
+        result = await self.query(QUERY_INSTALLED_UNRAID_PLUGINS)
+        return [str(name) for name in _require_list(result, "installedUnraidPlugins")]
+
+    async def list_plugin_install_operations(self) -> list[PluginInstallOperation]:
+        """List all tracked plugin-install operations."""
+        result = await self.query(QUERY_PLUGIN_INSTALL_OPERATIONS)
+        return [PluginInstallOperation.model_validate(o) for o in _require_list(result, "pluginInstallOperations")]
+
+    async def get_plugin_install_operation(self, operation_id: str) -> PluginInstallOperation:
+        """Get a single plugin-install operation by ID.
+
+        Raises:
+            UnraidNotFoundError: when no operation matches ``operation_id``.
+        """
+        result = await self.query(QUERY_PLUGIN_INSTALL_OPERATION, variables={"operationId": operation_id})
+        operation = result.get("pluginInstallOperation")
+        if operation is None:
+            raise UnraidNotFoundError(f"Plugin install operation '{operation_id}' not found")
+        if not isinstance(operation, dict):
+            raise UnraidError(f"Expected dict for 'pluginInstallOperation', got {type(operation).__name__}")
+        return PluginInstallOperation.model_validate(operation)
+
+    # ── Read methods: logs ──────────────────────────────────────────────
+
+    async def list_log_files(self) -> list[LogFile]:
+        """List available log files (name, path, size, mtime)."""
+        result = await self.query(QUERY_LOG_FILES)
+        return [LogFile.model_validate(f) for f in _require_list(result, "logFiles")]
+
+    async def read_log_file(
+        self,
+        path: str,
+        lines: int | None = None,
+        start_line: int | None = None,
+    ) -> LogFileContent:
+        """Read (a slice of) a log file.
+
+        Args:
+            path: Absolute path to the log file.
+            lines: Optional number of lines to return (paging window).
+            start_line: Optional 1-indexed starting line for the window.
+        """
+        result = await self.query(
+            QUERY_LOG_FILE,
+            variables={"path": path, "lines": lines, "startLine": start_line},
+        )
+        return LogFileContent.model_validate(_require_dict(result, "logFile"))
+
+    # ── Read methods: OIDC / SSO ────────────────────────────────────────
+
+    async def get_sso_status(self) -> bool:
+        """Return whether single sign-on (SSO) is enabled.
+
+        Raises:
+            UnraidError: when ``isSSOEnabled`` (a non-null schema field) is
+                absent or not a boolean, signalling schema drift rather than a
+                genuine ``False``.
+        """
+        result = await self.query(QUERY_SSO_STATUS)
+        enabled = result.get("isSSOEnabled")
+        if not isinstance(enabled, bool):
+            raise UnraidError(
+                f"Expected bool for 'isSSOEnabled', got {type(enabled).__name__}; run `unraid-mcp --check-schema`"
+            )
+        return enabled
+
+    async def list_public_oidc_providers(self) -> list[PublicOidcProvider]:
+        """List public OIDC providers (secret-free login-button projection)."""
+        result = await self.query(QUERY_PUBLIC_OIDC_PROVIDERS)
+        return [PublicOidcProvider.model_validate(p) for p in _require_list(result, "publicOidcProviders")]
+
+    # ── Read methods: network / cloud / services / settings ─────────────
+
+    async def get_network(self) -> Network:
+        """Get the server's network access URLs."""
+        result = await self.query(QUERY_NETWORK)
+        return Network.model_validate(_require_dict(result, "network"))
+
+    async def get_cloud(self) -> Cloud:
+        """Get Unraid Connect cloud health (secret-free)."""
+        result = await self.query(QUERY_CLOUD)
+        return Cloud.model_validate(_require_dict(result, "cloud"))
+
+    async def list_services(self) -> list[Service]:
+        """List background services and their status."""
+        result = await self.query(QUERY_SERVICES)
+        return [Service.model_validate(s) for s in _require_list(result, "services")]
+
+    async def get_display_settings(self) -> DisplaySettings:
+        """Get UI display settings (case image ``base64`` omitted)."""
+        result = await self.query(QUERY_DISPLAY)
+        return DisplaySettings.model_validate(_require_dict(result, "display"))
+
+    async def get_api_settings(self) -> ApiSettings:
+        """Get the ``settings.api`` configuration branch."""
+        result = await self.query(QUERY_API_SETTINGS)
+        return ApiSettings.model_validate(_require_dict(result, "settings"))
+
+    async def get_system_time(self) -> SystemTime:
+        """Get the current server time configuration."""
+        result = await self.query(QUERY_SYSTEM_TIME)
+        return SystemTime.model_validate(_require_dict(result, "systemTime"))
+
+    async def list_timezone_options(self) -> list[TimeZoneOption]:
+        """List available IANA timezone options."""
+        result = await self.query(QUERY_TIMEZONE_OPTIONS)
+        return [TimeZoneOption.model_validate(t) for t in _require_list(result, "timeZoneOptions")]
+
+    async def get_vars(self) -> Vars:
+        """Get a curated, secret-free subset of Unraid system variables."""
+        result = await self.query(QUERY_VARS)
+        return Vars.model_validate(_require_dict(result, "vars"))
+
+    # ── Read methods: disks (assignable) ────────────────────────────────
+
+    async def list_assignable_disks(self) -> list[Disk]:
+        """List disks eligible for assignment to the array."""
+        result = await self.query(QUERY_ASSIGNABLE_DISKS)
+        return [Disk.model_validate(d) for d in _require_list(result, "assignableDisks")]
+
+    # ── Read methods: rclone ────────────────────────────────────────────
+
+    async def get_rclone_config(self) -> RCloneConfig:
+        """Get rclone backup configuration (credential JSON redacted)."""
+        result = await self.query(QUERY_RCLONE_CONFIG)
+        return RCloneConfig.model_validate(_require_dict(result, "rclone"))
 
     # ── Write methods: array ────────────────────────────────────────────
 

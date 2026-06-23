@@ -46,55 +46,20 @@ INTENTIONALLY_UNCOVERED: dict[str, dict[str, frozenset[str]]] = {
                 "previewEffectivePermissions",
             }
         ),
-        "OIDC / SSO — identity-provider configuration": frozenset(
+        "OIDC / SSO — admin provider config carries clientSecret (snapshot L2711)": frozenset(
             {
-                "isSSOEnabled",
                 "oidcConfiguration",
                 "oidcProvider",
                 "oidcProviders",
-                "publicOidcProviders",
                 "validateOidcSession",
             }
         ),
         "config, settings & display — install-time configuration": frozenset(
             {
                 "config",
-                "settings",
                 "customization",
-                "display",
                 "publicTheme",
                 "isFreshInstall",
-                "systemTime",
-                "timeZoneOptions",
-                "vars",
-            }
-        ),
-        "plugins — plugin inventory & install operations": frozenset(
-            {
-                "installedUnraidPlugins",
-                "plugins",
-                "pluginInstallOperation",
-                "pluginInstallOperations",
-            }
-        ),
-        "UPS — power-device telemetry & configuration": frozenset(
-            {
-                "upsConfiguration",
-                "upsDeviceById",
-                "upsDevices",
-            }
-        ),
-        "metrics & logs — telemetry better served by subscriptions": frozenset(
-            {
-                "metrics",
-                "logFile",
-                "logFiles",
-            }
-        ),
-        "network & cloud — infrastructure configuration": frozenset(
-            {
-                "network",
-                "cloud",
             }
         ),
         "identity & multi-server inventory": frozenset(
@@ -104,9 +69,6 @@ INTENTIONALLY_UNCOVERED: dict[str, dict[str, frozenset[str]]] = {
                 "internalBootContext",
                 "server",
                 "servers",
-                "services",
-                "assignableDisks",
-                "rclone",
             }
         ),
     },

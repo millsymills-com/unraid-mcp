@@ -41,4 +41,7 @@ class UnraidBaseModel(BaseModel):
         extra="allow",
         alias_generator=to_camel,
         populate_by_name=True,
+        # Unraid exposes fields like ``modelName`` (UPS config); without this
+        # Pydantic warns on any field colliding with its ``model_`` namespace.
+        protected_namespaces=(),
     )
