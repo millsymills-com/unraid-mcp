@@ -438,12 +438,16 @@ query TimeZoneOptions {
 """
 
 # Curated Unraid system variables. ``csrfToken`` is intentionally never
-# selected (PROTO-012) — it is a session secret.
+# selected (PROTO-012) — it is a session secret. ``sysCacheSlots`` is
+# intentionally NOT selected: some servers' resolver emits ``NaN`` for it,
+# which GraphQL cannot serialize into ``Int`` and which fails the whole
+# ``vars`` read (#260). The field stays in SCHEMA_EXPECTATIONS — it exists
+# in the schema, we just refuse to depend on its brittle value.
 QUERY_VARS = """
 query Vars {
     vars {
         id version name timeZone comment workgroup domain
-        sysModel sysArraySlots sysCacheSlots sysFlashSlots
+        sysModel sysArraySlots sysFlashSlots
         useSsl port portssl useSsh portssh useTelnet useNtp
         ntpServer1 ntpServer2 ntpServer3 ntpServer4
         startArray spindownDelay defaultFormat defaultFsType
