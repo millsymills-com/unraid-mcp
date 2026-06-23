@@ -466,11 +466,15 @@ query AssignableDisks {
 # Rclone backup configuration. ``RCloneRemote.parameters``/``config`` are JSON
 # blobs that may carry cloud credentials and are deliberately NOT selected
 # (PROTO-012). ``configForm`` is skipped (UI form schema, no agent value).
+# ``drives`` is intentionally NOT selected: the server declares
+# ``RCloneBackupSettings.drives`` non-null but returns ``null`` when no
+# drives are configured, which fails the whole rclone read (#261). The field
+# stays in SCHEMA_EXPECTATIONS and as an optional model field; re-add it to
+# the selection once Unraid stops violating its own non-null contract.
 QUERY_RCLONE_CONFIG = """
 query RcloneConfig {
     rclone {
         remotes { name type }
-        drives { name }
     }
 }
 """
