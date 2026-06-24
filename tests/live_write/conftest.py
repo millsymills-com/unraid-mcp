@@ -58,6 +58,25 @@ def run_cleanup(label: str, coro_factory: Callable[[], Awaitable[object]]) -> No
         sys.stderr.flush()
 
 
+def cleanup_tool_call(label: str, tool: str, arguments: dict[str, object]) -> None:
+    """Invoke one mutating tool from a finalizer using a fresh client.
+
+    Finalizers run after the test's event loop is torn down. Reusing the
+    function-scoped ``live_mcp_client`` inside ``run_cleanup``'s fresh
+    ``asyncio.run`` reuses a bound httpx client across event loops, which
+    hangs indefinitely on close-wait sockets. A fresh server + client per
+    cleanup avoids the cross-loop reuse.
+    """
+
+    async def _do() -> None:
+        cfg = UnraidConfig(unraid_mode=UnraidMode.READWRITE)
+        server = create_server(cfg)
+        async with Client(server) as fresh:
+            await fresh.call_tool(tool, arguments)
+
+    run_cleanup(label, _do)
+
+
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Refuse to run under pytest-xdist; live writes must be serial."""
     if config.getoption("-n", default="0") not in ("0", None):
