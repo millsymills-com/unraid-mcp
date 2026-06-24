@@ -61,14 +61,16 @@ def _safe_error_text(message: str, key: SecretStr | str | None) -> str:
 
 
 async def _check_schema() -> int:
-    """Introspect the live schema and emit a drift report.
+    """Introspect the live schema and emit a field-presence drift report.
 
+    Checks that tracked types/fields are still present; does not detect
+    argument renames or return-type changes on fields that keep their name.
     Drift lines go to stdout (safe for public CI summaries — field names only).
     Diagnostic and error messages go to stderr (CI logs only — may contain
     raw HTTP error bodies from the server).
 
     Exit codes:
-        0 — schema matches client expectations
+        0 — all tracked fields present
         1 — no API key configured
         2 — drift detected (drift lines on stdout) or connection failure (stderr only)
     """
@@ -166,11 +168,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--check-schema",
         action="store_true",
         help=(
-            "Introspect the live Unraid GraphQL schema and report any drift "
-            "from what this client expects to query. Exit 0 when the schema "
-            "is compatible, 1 when no API key is configured, 2 on drift or "
-            "connection failure. Run this against a new Unraid release to "
-            "check upgrade compatibility before shipping."
+            "Introspect the live Unraid GraphQL schema and report whether the "
+            "types and fields this client queries are still present. Detects "
+            "removed fields; does not detect argument or return-type changes. "
+            "Exit 0 when all tracked fields are present, 1 when no API key is "
+            "configured, 2 on missing fields or connection failure."
         ),
     )
     return parser

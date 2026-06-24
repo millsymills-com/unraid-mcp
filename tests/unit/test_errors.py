@@ -14,6 +14,7 @@ import logging
 import pytest
 
 from unraid_mcp.errors import (
+    _ERROR_TEMPLATES,
     UnraidAuthError,
     UnraidConnectionError,
     UnraidError,
@@ -134,3 +135,27 @@ class TestHandleClientErrorValidationMapping:
         # Subclass routing must not steal the generic UnraidGraphQLError branch.
         with pytest.raises(Exception, match="GraphQL error"):
             handle_client_error(UnraidGraphQLError("Resolver exploded", code="INTERNAL_SERVER_ERROR"))
+
+
+class TestErrorTemplatesOrdering:
+    """`_ERROR_TEMPLATES` must be topologically sorted: every subclass appears
+    before its parent so that `_classify_error`'s first-match ``isinstance``
+    loop routes to the most-specific handler.
+
+    A more-general type at index j shadowing a more-specific type at index i>j
+    would make the subclass branch unreachable.  This test enforces the
+    invariant so a future maintainer who appends a new subclass at the end gets
+    an immediate failure rather than a silent mis-classification.
+    """
+
+    def test_subclass_before_parent(self) -> None:
+        for i, (child_type, _, _) in enumerate(_ERROR_TEMPLATES):
+            for j, (parent_type, _, _) in enumerate(_ERROR_TEMPLATES[:i]):
+                if issubclass(child_type, parent_type) and child_type is not parent_type:
+                    raise AssertionError(
+                        f"_ERROR_TEMPLATES ordering violation: "
+                        f"{child_type.__name__} (index {i}) is a subclass of "
+                        f"{parent_type.__name__} (index {j}), but the parent "
+                        f"appears first — _classify_error will never reach the "
+                        f"more-specific {child_type.__name__} branch."
+                    )
