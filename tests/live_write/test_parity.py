@@ -7,11 +7,8 @@ to avoid leaving a parity check running on the live array.
 from __future__ import annotations
 
 import pytest
-from fastmcp import Client
 
-from tests.live_write.conftest import run_cleanup, wait_for_state
-from unraid_mcp.config import UnraidConfig, UnraidMode
-from unraid_mcp.server import create_server
+from tests.live_write.conftest import cleanup_tool_call, wait_for_state
 
 pytestmark = pytest.mark.live_write
 
@@ -34,20 +31,7 @@ async def test_unraid_start_parity_check_unraid_pause_parity_check_unraid_resume
         pytest.skip(f"array not STARTED (state={initial.get('state')}); cannot start parity")
 
     def _sync_cancel() -> None:
-        """Safety-net cancel via a fresh client + fresh loop.
-
-        We don't reuse ``live_mcp_client`` here because finalizers run
-        after the test's event loop is torn down — sharing the bound
-        httpx async client across loops hangs on close-wait sockets.
-        """
-
-        async def _do_cancel() -> None:
-            cfg = UnraidConfig(unraid_mode=UnraidMode.READWRITE)
-            server = create_server(cfg)
-            async with Client(server) as fresh:
-                await fresh.call_tool("unraid_cancel_parity_check", {})
-
-        run_cleanup("safety-net unraid_cancel_parity_check", _do_cancel)
+        cleanup_tool_call("safety-net unraid_cancel_parity_check", "unraid_cancel_parity_check", {})
 
     request.addfinalizer(_sync_cancel)
 

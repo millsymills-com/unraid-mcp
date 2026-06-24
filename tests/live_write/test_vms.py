@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.live_write.conftest import _assert_mcptest, run_cleanup, wait_for_state
+from tests.live_write.conftest import _assert_mcptest, cleanup_tool_call, wait_for_state
 
 pytestmark = pytest.mark.live_write
 
@@ -31,10 +31,7 @@ async def test_unraid_start_vm_then_unraid_stop_vm(live_mcp_client, mcptest_vm, 
     vm_id = mcptest_vm["id"]
 
     def _stop() -> None:
-        run_cleanup(
-            f"unraid_stop_vm({vm_id})",
-            lambda: live_mcp_client.call_tool("unraid_stop_vm", {"vm_id": vm_id}),
-        )
+        cleanup_tool_call(f"unraid_stop_vm({vm_id})", "unraid_stop_vm", {"vm_id": vm_id})
 
     request.addfinalizer(_stop)
 
@@ -64,10 +61,7 @@ async def test_unraid_pause_vm_then_unraid_resume_vm(
         pytest.skip(f"VM not running; can't pause (state={await _vm_state(live_mcp_client, vm_id)})")
 
     def _resume() -> None:
-        run_cleanup(
-            f"unraid_resume_vm({vm_id})",
-            lambda: live_mcp_client.call_tool("unraid_resume_vm", {"vm_id": vm_id}),
-        )
+        cleanup_tool_call(f"unraid_resume_vm({vm_id})", "unraid_resume_vm", {"vm_id": vm_id})
 
     request.addfinalizer(_resume)
 

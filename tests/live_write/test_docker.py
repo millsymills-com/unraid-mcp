@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.live_write.conftest import _assert_mcptest, run_cleanup, wait_for_state
+from tests.live_write.conftest import _assert_mcptest, cleanup_tool_call, wait_for_state
 
 pytestmark = pytest.mark.live_write
 
@@ -30,10 +30,7 @@ async def _stop_start_cycle(live_mcp_client, mcptest_container, request: pytest.
 
     def _restore() -> None:
         tool = "unraid_start_container" if initial == "running" else "unraid_stop_container"
-        run_cleanup(
-            f"{tool}({cid}) restore for {name}",
-            lambda: live_mcp_client.call_tool(tool, {"container_id": cid}),
-        )
+        cleanup_tool_call(f"{tool}({cid}) restore for {name}", tool, {"container_id": cid})
 
     request.addfinalizer(_restore)
 
@@ -68,9 +65,10 @@ async def _pause_unpause_cycle(live_mcp_client, mcptest_container, request: pyte
         pytest.skip(f"{name} is not running; can't pause")
 
     def _unpause() -> None:
-        run_cleanup(
+        cleanup_tool_call(
             f"unraid_unpause_container({cid}) for {name}",
-            lambda: live_mcp_client.call_tool("unraid_unpause_container", {"container_id": cid}),
+            "unraid_unpause_container",
+            {"container_id": cid},
         )
 
     request.addfinalizer(_unpause)
