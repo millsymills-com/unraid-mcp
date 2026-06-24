@@ -6,11 +6,17 @@ startup by :meth:`UnraidClient.check_schema_compatibility` (introspection
 probe added in #68). Treat that dict as the source of truth — the per-query
 comments here are reviewer hints, not the contract.
 
+**Scope of the boot-time schema check**: the check verifies that tracked
+GraphQL types and fields are still *present* in the live schema. It does
+not detect argument renames/removals or return-type changes on a field that
+keeps its name; those surface as ``GRAPHQL_VALIDATION_FAILED`` at the first
+tool call, not at boot.
+
 Drift incidents #51 and #53-#61 all shipped because the constants below
 had no in-source signal about which Unraid API version a query targeted.
 Before changing any ``QUERY_*`` or ``MUTATION_*`` body, update
-``SCHEMA_EXPECTATIONS`` in lockstep so ``--check-schema`` keeps catching
-mismatches at boot instead of at the first tool call.
+``SCHEMA_EXPECTATIONS`` in lockstep so ``--check-schema`` catches field
+removals at boot.
 """
 
 from __future__ import annotations
@@ -641,9 +647,11 @@ mutation ArchiveNotifications($ids: [PrefixedID!]!) {
 # ── Schema compatibility check (#68) ────────────────────────────────────
 
 # Fields this client reads from the Unraid GraphQL schema. Checked at
-# startup via :meth:`UnraidClient.check_schema_compatibility` so drift is
-# caught at boot instead of per-tool-call. Update in lockstep with the
-# query/mutation constants above — the two should move together.
+# startup via :meth:`UnraidClient.check_schema_compatibility` — verifies
+# that tracked types/fields are still *present*. Argument renames and
+# return-type changes on existing fields are not detected here; they surface
+# as GRAPHQL_VALIDATION_FAILED at the first affected tool call.
+# Update in lockstep with the query/mutation constants above.
 #
 # Only the Query / Mutation root fields and a handful of nested types are
 # tracked. That's deliberate: too-granular coverage turns every legit
@@ -941,8 +949,10 @@ def compute_schema_drift(
 ) -> list[str]:
     """Return human-readable drift descriptions; empty list when schema matches.
 
-    Each entry names the type and missing field so operators can map
-    directly to the query that reads it.
+    Checks field *presence* only — detects removed types and removed fields,
+    not argument renames/removals or return-type changes on fields that keep
+    their name. Each entry names the type and missing field so operators can
+    map directly to the query that reads it.
     """
     drifts: list[str] = []
     for type_name, expected_fields in expected.items():
@@ -1593,13 +1603,16 @@ class UnraidClient(BaseGraphQLClient):
     # ── Lifecycle ───────────────────────────────────────────────────────
 
     async def check_schema_compatibility(self) -> list[str]:
-        """Introspect the server schema and return drift descriptions.
+        """Introspect the server schema and return field-presence drift descriptions.
 
-        Empty list means the live schema satisfies :data:`SCHEMA_EXPECTATIONS`.
-        Any mismatch (removed types, renamed fields, missing root queries) is
-        reported as a string entry. Called at startup by the server lifespan
-        (#68) so operators see drift in the server log rather than at the
-        first tool call.
+        Empty list means every type/field in :data:`SCHEMA_EXPECTATIONS` is
+        still present in the live schema. Drift entries report removed types or
+        removed fields. Argument renames/removals and return-type changes on
+        fields that keep their name are not detected here; those surface as
+        ``GRAPHQL_VALIDATION_FAILED`` at the first affected tool call.
+
+        Called at startup by the server lifespan (#68) so field-removal drift
+        appears in the server log rather than at the first tool call.
 
         Does not raise on drift — the server still starts. It raises the
         usual transport exceptions on connection failure so the caller can
