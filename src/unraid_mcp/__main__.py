@@ -21,6 +21,17 @@ def _emit(message: str) -> None:
     print(message, file=sys.stderr)
 
 
+def _emit_drift(line: str) -> None:
+    """Write a schema-drift line to stdout for safe capture by the schema-probe workflow.
+
+    Drift lines are field-name strings (e.g. ``TypeName: missing fields [...]``) — no
+    HTTP error bodies, no server internals.  Keeping them on stdout lets the workflow
+    capture only this stream into probe.log and post it publicly without risking
+    disclosure of server error payloads, which remain on stderr (CI-logs only).
+    """
+    print(line, flush=True)
+
+
 def _redact_api_key(key: SecretStr | str | None) -> str:
     """Describe the API key without echoing any of its characters."""
     if key is None:
@@ -50,15 +61,18 @@ def _safe_error_text(message: str, key: SecretStr | str | None) -> str:
 
 
 async def _check_schema() -> int:
-    """Introspect the live schema and report field-presence drift to stderr.
+    """Introspect the live schema and emit a field-presence drift report.
 
     Checks that tracked types/fields are still present; does not detect
     argument renames or return-type changes on fields that keep their name.
+    Drift lines go to stdout (safe for public CI summaries — field names only).
+    Diagnostic and error messages go to stderr (CI logs only — may contain
+    raw HTTP error bodies from the server).
 
     Exit codes:
         0 — all tracked fields present
         1 — no API key configured
-        2 — missing fields detected (details emitted to stderr) or connection failure
+        2 — drift detected (drift lines on stdout) or connection failure (stderr only)
     """
     config = UnraidConfig()
     if not config.api_enabled:
@@ -84,9 +98,9 @@ async def _check_schema() -> int:
         if not drifts:
             _emit(f"Schema compatibility check passed against {config.graphql_url}")
             return 0
-        _emit(f"Detected {len(drifts)} schema-drift issue(s):")
+        _emit(f"Detected {len(drifts)} schema-drift issue(s) — drift lines on stdout:")
         for drift in drifts:
-            _emit(f"  • {drift}")
+            _emit_drift(drift)
         return 2
     finally:
         await client.close()

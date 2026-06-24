@@ -84,12 +84,12 @@ jobs:
           UNRAID_PORT: ${{ secrets.UNRAID_PORT }}
           UNRAID_USE_HTTPS: ${{ secrets.UNRAID_USE_HTTPS }}
           UNRAID_VERIFY_SSL: ${{ secrets.UNRAID_VERIFY_SSL }}
-        # Capture stdout+stderr so we can surface them on failure without
-        # losing the original exit status (set -o pipefail keeps tee out of
-        # the way).
+        # Redirect stdout only to probe.log (drift field-name lines — safe to
+        # publish publicly).  Stderr (diagnostic messages, raw HTTP error bodies)
+        # flows to the CI log unchanged for debugging but is never captured into
+        # probe.log and therefore never posted to the public issue or step summary.
         run: |
-          set -o pipefail
-          uv run unraid-mcp --check-schema 2>&1 | tee probe.log
+          uv run unraid-mcp --check-schema > probe.log
         continue-on-error: true
 
       - name: Publish drift report to step summary
@@ -134,8 +134,9 @@ jobs:
           # exists, otherwise file a new one. `gh issue list` defaults to
           # sort:created-desc (newest first), so an explicit
           # `--search "sort:created-asc"` is required to pick the oldest —
-          # the issue with accumulated history. Cap probe.log to keep the
-          # comment under GitHub's body-size ceiling.
+          # the issue with accumulated history. probe.log contains only
+          # drift field-name lines (stdout); raw HTTP error bodies stay in
+          # the CI log (stderr) and are never posted here.
           LOG=$(head -c 50000 probe.log)
           # shellcheck disable=SC2016  # printf format is intentionally literal; values flow through %s args.
           BODY=$(printf '## Schema drift detected\n\nRun: %s\n\n```\n%s\n```\n' "$RUN_URL" "$LOG")
