@@ -44,13 +44,15 @@ Generate an API key in the Unraid WebGUI under **Settings → Management Access 
 
 Once configured, run `unraid-mcp --check-config` to verify connectivity before attaching an MCP client; it prints the resolved config (with the API key redacted), runs a single validation query, and exits 0 / 1 / 2 (ok / no key / validation failed).
 
-Before re-deploying against a new Unraid release, run `unraid-mcp --check-schema` to pre-flight upgrade compatibility; it introspects the live GraphQL schema and reports any drift from what this client expects to query. Exit codes are `0` (schema compatible), `1` (no API key configured), and `2` (drift detected or connection failure). Sample drift output:
+Before re-deploying against a new Unraid release, run `unraid-mcp --check-schema` to pre-flight upgrade compatibility; it introspects the live GraphQL schema and reports whether the types and fields this client queries are still present. Exit codes are `0` (all tracked fields present), `1` (no API key configured), and `2` (missing fields detected or connection failure). Sample drift output:
 
 ```
 Detected 2 schema-drift issue(s):
-  • Query.docker.containers: missing field `autoStart`
-  • Mutation.array.startArray: argument `force` removed
+  • Query: missing fields ['docker', 'flash']
+  • Mutation: missing fields ['array']
 ```
+
+> **Scope:** the check verifies field *presence* only. Argument renames or return-type changes on fields that keep their name are not detected at boot; they surface as `GRAPHQL_VALIDATION_FAILED` at the first affected tool call.
 
 ### Continuous schema drift check (CI)
 
