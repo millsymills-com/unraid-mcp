@@ -177,9 +177,7 @@ class TestCheckSchema:
         monkeypatch.setenv("UNRAID_API_KEY", secret)
         raw_body = "WAF blocked: internal-host-name.local port 9999 token=abc"
         mock_client = AsyncMock()
-        mock_client.check_schema_compatibility.side_effect = UnraidServerError(
-            f"HTTP 503: {raw_body}", status_code=503
-        )
+        mock_client.check_schema_compatibility.side_effect = UnraidServerError(f"HTTP 503: {raw_body}", status_code=503)
         with patch("unraid_mcp.__main__.UnraidClient", return_value=mock_client):
             result = await _check_schema()
         assert result == 2
