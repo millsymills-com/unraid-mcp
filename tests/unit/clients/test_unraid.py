@@ -645,6 +645,48 @@ class TestNotificationMutations:
         result = await client.archive_all_notifications(importance="ALERT")
         assert result == {"unread": None, "archive": None}
 
+    @respx.mock
+    async def test_archive_all_paginates_beyond_one_page(self, client):
+        # Verify that >50 unread notifications are fully collected across
+        # multiple pages before the single bulk-archive mutation is issued.
+        # Page 1: exactly 50 items (full page → loop continues).
+        # Page 2: exactly 50 items (full page → loop continues).
+        # Page 3: 10 items (short page → loop ends, 110 IDs total).
+        def make_page(start: int, count: int) -> list[dict[str, str]]:
+            return [
+                {"id": f"n{i}", "type": "UNREAD", "title": f"notif {i}", "importance": "INFO"}
+                for i in range(start, start + count)
+            ]
+
+        page1 = make_page(0, 50)
+        page2 = make_page(50, 50)
+        page3 = make_page(100, 10)
+        archive_overview = {
+            "unread": {"total": 0, "info": 0, "warning": 0, "alert": 0},
+            "archive": {"total": 110, "info": 110, "warning": 0, "alert": 0},
+        }
+        route = respx.post(GRAPHQL_URL).mock(
+            side_effect=[
+                httpx.Response(200, json={"data": {"notifications": {"id": "wrap", "list": page1}}}),
+                httpx.Response(200, json={"data": {"notifications": {"id": "wrap", "list": page2}}}),
+                httpx.Response(200, json={"data": {"notifications": {"id": "wrap", "list": page3}}}),
+                httpx.Response(200, json={"data": {"archiveNotifications": archive_overview}}),
+            ]
+        )
+        result = await client.archive_all_notifications()
+        # Three list calls then one archive mutation.
+        assert len(route.calls) == 4
+        list_call_0 = json.loads(route.calls[0].request.content)
+        list_call_1 = json.loads(route.calls[1].request.content)
+        list_call_2 = json.loads(route.calls[2].request.content)
+        assert list_call_0["variables"] == {"type": "UNREAD", "limit": 50, "offset": 0}
+        assert list_call_1["variables"] == {"type": "UNREAD", "limit": 50, "offset": 50}
+        assert list_call_2["variables"] == {"type": "UNREAD", "limit": 50, "offset": 100}
+        archive_call = json.loads(route.calls[3].request.content)
+        expected_ids = [f"n{i}" for i in range(110)]
+        assert archive_call["variables"] == {"ids": expected_ids}
+        assert result["archiveNotifications"]["archive"]["total"] == 110
+
 
 class TestNotificationLiteralRoundTrip:
     """Happy-path coverage for every accepted ``NotificationType`` /

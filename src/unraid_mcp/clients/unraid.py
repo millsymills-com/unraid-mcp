@@ -1582,10 +1582,18 @@ class UnraidClient(BaseGraphQLClient):
             ``NotificationOverview`` payload after the bulk archive, or
             ``{"unread": None, "archive": None}`` when nothing matched.
         """
-        notifs = await self.list_notifications(notification_type="UNREAD", limit=1000, offset=0)
+        page_size = 50
+        all_notifs: list[Notification] = []
+        offset = 0
+        while True:
+            page = await self.list_notifications(notification_type="UNREAD", limit=page_size, offset=offset)
+            all_notifs.extend(page)
+            if len(page) < page_size:
+                break
+            offset += page_size
         if importance is not None:
-            notifs = [n for n in notifs if n.importance == importance]
-        ids = [n.id for n in notifs if n.id is not None]
+            all_notifs = [n for n in all_notifs if n.importance == importance]
+        ids = [n.id for n in all_notifs if n.id is not None]
         if not ids:
             return {"unread": None, "archive": None}
         return await self.mutate(MUTATION_ARCHIVE_NOTIFICATIONS, variables={"ids": ids})
