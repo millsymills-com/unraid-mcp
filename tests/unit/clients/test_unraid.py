@@ -102,7 +102,7 @@ class TestListContainers:
         # contract violation and must raise, not fabricate an empty roster
         # (#267). Daemon-unreachable tolerance lives at ``docker.containers``.
         respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"docker": None}}))
-        with pytest.raises(UnraidError, match="docker"):
+        with pytest.raises(UnraidError, match="Got null for non-null"):
             await client.list_containers()
 
     @respx.mock
@@ -142,7 +142,7 @@ class TestListDockerNetworks:
     async def test_list_docker_networks_raises_on_null_docker_root(self, client):
         # Same non-null-root contract as list_containers (#267).
         respx.post(GRAPHQL_URL).mock(return_value=httpx.Response(200, json={"data": {"docker": None}}))
-        with pytest.raises(UnraidError, match="docker"):
+        with pytest.raises(UnraidError, match="Got null for non-null"):
             await client.list_docker_networks()
 
     @respx.mock
@@ -153,6 +153,18 @@ class TestListDockerNetworks:
         )
         result = await client.list_docker_networks()
         assert result == []
+
+    @respx.mock
+    async def test_list_docker_networks_raises_on_wrong_type(self, client):
+        # Wrong-typed nested field is drift, same as containers. Regression for #65.
+        respx.post(GRAPHQL_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={"data": {"docker": {"networks": {"not": "a list"}}}},
+            ),
+        )
+        with pytest.raises(UnraidError, match=re.escape("Expected list for 'docker.networks'")):
+            await client.list_docker_networks()
 
 
 class TestListNotifications:
