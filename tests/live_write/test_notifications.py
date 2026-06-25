@@ -27,19 +27,20 @@ async def _list_notifications(live_mcp_client) -> list[dict]:
     return raw if isinstance(raw, list) else raw.get("result", [])
 
 
-def _mcptest_only(notifications: list[dict]) -> list[dict]:
-    return [n for n in notifications if str(n.get("title", "")).lower().startswith(_MCPTEST_PREFIX)]
+async def _seeded_in_active(live_mcp_client, seed_notification, title: str) -> str:
+    """Seed a notification and wait until it lands in the active list; return its id."""
+    nid = (await seed_notification(title))["id"]
+    await wait_for_state(
+        lambda: _list_notifications(live_mcp_client),
+        predicate=lambda lst: nid in {n["id"] for n in lst},
+        timeout=5.0,
+    )
+    return nid
 
 
-async def test_unraid_archive_notification_removes_from_active_list(live_mcp_client) -> None:
+async def test_unraid_archive_notification_removes_from_active_list(live_mcp_client, seed_notification) -> None:
     """Archive an mcptest notification, verify it disappears from the active list."""
-    mcptest = _mcptest_only(await _list_notifications(live_mcp_client))
-    if not mcptest:
-        pytest.skip(
-            "no mcptest_*-titled active notification; create one on the tower "
-            "(Notifications → Add, title=mcptest-archive) to enable this test"
-        )
-    nid = mcptest[0]["id"]
+    nid = await _seeded_in_active(live_mcp_client, seed_notification, "mcptest-archive")
 
     await live_mcp_client.call_tool("unraid_archive_notification", {"notification_id": nid})
 
@@ -51,15 +52,9 @@ async def test_unraid_archive_notification_removes_from_active_list(live_mcp_cli
     assert nid not in {n["id"] for n in after}
 
 
-async def test_unraid_delete_notification_removes_permanently(live_mcp_client) -> None:
+async def test_unraid_delete_notification_removes_permanently(live_mcp_client, seed_notification) -> None:
     """Delete an mcptest notification, verify the id is gone from any list."""
-    mcptest = _mcptest_only(await _list_notifications(live_mcp_client))
-    if not mcptest:
-        pytest.skip(
-            "no mcptest_*-titled active notification; create one on the tower "
-            "(Notifications → Add, title=mcptest-delete) to enable this test"
-        )
-    nid = mcptest[0]["id"]
+    nid = await _seeded_in_active(live_mcp_client, seed_notification, "mcptest-delete")
 
     await live_mcp_client.call_tool("unraid_delete_notification", {"notification_id": nid})
 
