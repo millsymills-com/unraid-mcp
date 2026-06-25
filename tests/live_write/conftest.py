@@ -9,6 +9,7 @@ Three layers of protection against accidental mutation:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import sys
 import time
@@ -21,11 +22,18 @@ from fastmcp import Client
 from tests.live_write._gates import MCPTEST_PREFIX as _MCPTEST_PREFIX
 from tests.live_write._gates import assert_mcptest as _assert_mcptest
 from tests.live_write._gates import require_writes_enabled
+from unraid_mcp.clients.unraid import MUTATION_DELETE_NOTIFICATION, UnraidClient
 from unraid_mcp.config import UnraidConfig, UnraidMode
 from unraid_mcp.server import create_server
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+
+_MUTATION_CREATE_NOTIFICATION = """
+mutation CreateNotification($input: NotificationData!) {
+    createNotification(input: $input) { id title type }
+}
+"""
 
 log = logging.getLogger(__name__)
 
@@ -75,6 +83,88 @@ def cleanup_tool_call(label: str, tool: str, arguments: dict[str, object]) -> No
             await fresh.call_tool(tool, arguments)
 
     run_cleanup(label, _do)
+
+
+def _build_raw_client() -> UnraidClient:
+    """A fresh raw GraphQL client for operations with no MCP tool (e.g. seeding)."""
+    cfg = UnraidConfig(unraid_mode=UnraidMode.READWRITE)
+    if cfg.unraid_api_key is None:
+        raise RuntimeError("UNRAID_API_KEY must be set for live_write seeding")
+    return UnraidClient(
+        graphql_url=cfg.graphql_url,
+        api_key=cfg.unraid_api_key,
+        verify_ssl=cfg.unraid_verify_ssl,
+        timeout=cfg.unraid_request_timeout,
+        max_retries=cfg.unraid_max_retries,
+    )
+
+
+async def _delete_notification_any_state(notification_id: str) -> None:
+    """Best-effort delete from both unread and archive lists (state is unknown at teardown)."""
+    client = _build_raw_client()
+    try:
+        for ntype in ("ARCHIVE", "UNREAD"):
+            with contextlib.suppress(Exception):
+                await client.mutate(MUTATION_DELETE_NOTIFICATION, variables={"id": notification_id, "type": ntype})
+    finally:
+        await client.close()
+
+
+async def _resolve_seeded_id(client: UnraidClient, title: str, before: set[str]) -> str:
+    """Resolve the persisted notification id for a just-created ``title``.
+
+    ``createNotification`` returns an optimistic UUID id, but the persisted
+    entry the list reports uses a sanitized title + timestamp id, so the two
+    never match. Diff the unread list against a pre-create snapshot to recover
+    the real id.
+    """
+    for _ in range(20):
+        entries = await client.list_notifications(notification_type="UNREAD", limit=200, offset=0)
+        fresh = [n for n in entries if n.id and n.id not in before and n.title == title]
+        if fresh:
+            return fresh[0].id  # ty: ignore[invalid-return-type]  — guarded by `n.id and`
+        await asyncio.sleep(0.5)
+    raise AssertionError(f"seeded notification {title!r} never appeared in the unread list")
+
+
+@pytest.fixture
+def seed_notification() -> Iterator[Callable[[str], Awaitable[dict]]]:
+    """Create ``mcptest_*`` notifications via the live API; delete them on teardown.
+
+    Lets the archive/delete tests provision their own fixture data instead of
+    depending on a tower-side ``notify`` seed. Returns the persisted notification
+    (with the real list id). Every created notification is removed after the test
+    so the live tower is left clean.
+    """
+    created: list[str] = []
+
+    async def _seed(title: str, importance: str = "INFO") -> dict:
+        client = _build_raw_client()
+        try:
+            before = {
+                n.id for n in await client.list_notifications(notification_type="UNREAD", limit=200, offset=0) if n.id
+            }
+            await client.mutate(
+                _MUTATION_CREATE_NOTIFICATION,
+                variables={
+                    "input": {
+                        "title": title,
+                        "subject": "mcptest live_write",
+                        "description": "transient fixture — safe to delete",
+                        "importance": importance,
+                    }
+                },
+            )
+            nid = await _resolve_seeded_id(client, title, before)
+        finally:
+            await client.close()
+        created.append(nid)
+        return {"id": nid, "title": title}
+
+    yield _seed
+
+    for nid in created:
+        run_cleanup(f"delete seeded notification {nid}", lambda nid=nid: _delete_notification_any_state(nid))
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
