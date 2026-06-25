@@ -687,6 +687,42 @@ class TestNotificationMutations:
         assert archive_call["variables"] == {"ids": expected_ids}
         assert result["archiveNotifications"]["archive"]["total"] == 110
 
+    @respx.mock
+    async def test_archive_all_stops_on_empty_page_at_exact_boundary(self, client):
+        # Exact-multiple boundary: a full first page is followed by an empty
+        # page rather than a short one. The ``len(page) < page_size`` loop must
+        # still terminate — it ends on the empty page, where 0 < 50 — so two
+        # list calls are issued and the 50 collected IDs are bulk-archived once.
+        def make_page(start: int, count: int) -> list[dict[str, str]]:
+            return [
+                {"id": f"n{i}", "type": "UNREAD", "title": f"notif {i}", "importance": "INFO"}
+                for i in range(start, start + count)
+            ]
+
+        page1 = make_page(0, 50)
+        archive_overview = {
+            "unread": {"total": 0, "info": 0, "warning": 0, "alert": 0},
+            "archive": {"total": 50, "info": 50, "warning": 0, "alert": 0},
+        }
+        route = respx.post(GRAPHQL_URL).mock(
+            side_effect=[
+                httpx.Response(200, json={"data": {"notifications": {"id": "wrap", "list": page1}}}),
+                httpx.Response(200, json={"data": {"notifications": {"id": "wrap", "list": []}}}),
+                httpx.Response(200, json={"data": {"archiveNotifications": archive_overview}}),
+            ]
+        )
+        result = await client.archive_all_notifications()
+        # Two list calls (full page, then empty page) then one archive mutation.
+        assert len(route.calls) == 3
+        list_call_0 = json.loads(route.calls[0].request.content)
+        list_call_1 = json.loads(route.calls[1].request.content)
+        assert list_call_0["variables"] == {"type": "UNREAD", "limit": 50, "offset": 0}
+        assert list_call_1["variables"] == {"type": "UNREAD", "limit": 50, "offset": 50}
+        archive_call = json.loads(route.calls[2].request.content)
+        expected_ids = [f"n{i}" for i in range(50)]
+        assert archive_call["variables"] == {"ids": expected_ids}
+        assert result["archiveNotifications"]["archive"]["total"] == 50
+
 
 class TestNotificationLiteralRoundTrip:
     """Happy-path coverage for every accepted ``NotificationType`` /
