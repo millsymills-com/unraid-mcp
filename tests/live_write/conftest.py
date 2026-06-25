@@ -9,7 +9,6 @@ Three layers of protection against accidental mutation:
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 import sys
 import time
@@ -100,14 +99,26 @@ def _build_raw_client() -> UnraidClient:
 
 
 async def _delete_notification_any_state(notification_id: str) -> None:
-    """Best-effort delete from both unread and archive lists (state is unknown at teardown)."""
+    """Delete from both unread and archive lists (state is unknown at teardown).
+
+    The notification exists in exactly one state, so one of the two mutations is
+    expected to fail — that failure is suppressed. But if *both* fail the
+    notification is orphaned on the live tower for a real reason (auth revoked,
+    network down, server error), so re-raise to let ``run_cleanup`` surface it
+    instead of silently leaking the fixture.
+    """
     client = _build_raw_client()
+    failures: list[Exception] = []
     try:
         for ntype in ("ARCHIVE", "UNREAD"):
-            with contextlib.suppress(Exception):
+            try:
                 await client.mutate(MUTATION_DELETE_NOTIFICATION, variables={"id": notification_id, "type": ntype})
+            except Exception as exc:
+                failures.append(exc)
     finally:
         await client.close()
+    if len(failures) == 2:
+        raise failures[0]
 
 
 async def _resolve_seeded_id(client: UnraidClient, title: str, before: set[str]) -> str:
