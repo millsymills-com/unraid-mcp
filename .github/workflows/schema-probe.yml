@@ -92,8 +92,72 @@ jobs:
           uv run unraid-mcp --check-schema > probe.log
         continue-on-error: true
 
-      - name: Publish drift report to step summary
+      - name: Scrub probe.log against drift allowlist
+        id: scrub
         if: steps.secrets.outputs.configured == 'true' && steps.probe.outcome == 'failure'
+        run: |
+          set -euo pipefail
+          # Fail-closed allowlist scrub of probe.log before any public post.
+          # probe.log captures only stdout from `unraid-mcp --check-schema`,
+          # which emits exclusively schema-drift lines in one of two fixed
+          # formats (see _emit_drift / compute_schema_drift in src/unraid_mcp).
+          # Diagnostic text and raw HTTP error bodies stay on stderr (CI log
+          # only). This guard ensures a future stray stdout write — a rogue
+          # print(), or a dependency writing to stdout — can never silently
+          # publish to the public issue/summary.
+          #
+          # Drift line grammar (Python list repr of sorted field-name strings):
+          #   <Type>: missing fields ['a', 'b']
+          #   <Type>: type missing from server schema (client expects fields ['a'])
+          # Type and field names are GraphQL identifiers: [A-Za-z0-9_]+.
+          field_list="\\['[A-Za-z0-9_]+'(, '[A-Za-z0-9_]+')*\\]|\\[\\]"
+          allow_missing="^[A-Za-z0-9_]+: missing fields ($field_list)$"
+          allow_type="^[A-Za-z0-9_]+: type missing from server schema \\(client expects fields ($field_list)\\)$"
+
+          if [ ! -f probe.log ]; then
+            echo "::error::probe.log not found — refusing to post."
+            {
+              echo "has_drift=false"
+              echo "safe=false"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Only non-blank lines are meaningful drift content.
+          content=$(grep -v '^[[:space:]]*$' probe.log || true)
+
+          if [ -z "$content" ]; then
+            echo "::notice::probe reported failure but produced no drift lines — nothing to post."
+            {
+              echo "has_drift=false"
+              echo "safe=true"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Fail closed: every non-blank line MUST match an allowed drift format.
+          unexpected=$(printf '%s\n' "$content" | grep -vE "$allow_missing|$allow_type" || true)
+          if [ -n "$unexpected" ]; then
+            echo "::error::probe.log contains lines outside the schema-drift allowlist — refusing to post to the public issue/summary. Inspect the CI log; the unexpected content is NOT echoed here to avoid disclosure."
+            echo "Unexpected line count: $(printf '%s\n' "$unexpected" | grep -c .)"
+            {
+              echo "has_drift=true"
+              echo "safe=false"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          {
+            echo "has_drift=true"
+            echo "safe=true"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish drift report to step summary
+        if: >-
+          steps.secrets.outputs.configured == 'true'
+          && steps.probe.outcome == 'failure'
+          && steps.scrub.outputs.safe == 'true'
+          && steps.scrub.outputs.has_drift == 'true'
         run: |
           {
             echo "## Schema drift detected"
@@ -109,6 +173,8 @@ jobs:
         if: >-
           steps.secrets.outputs.configured == 'true'
           && steps.probe.outcome == 'failure'
+          && steps.scrub.outputs.safe == 'true'
+          && steps.scrub.outputs.has_drift == 'true'
           && inputs.suppress_issue != true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -125,6 +191,8 @@ jobs:
         if: >-
           steps.secrets.outputs.configured == 'true'
           && steps.probe.outcome == 'failure'
+          && steps.scrub.outputs.safe == 'true'
+          && steps.scrub.outputs.has_drift == 'true'
           && inputs.suppress_issue != true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -155,6 +223,8 @@ jobs:
 
       - name: Fail the job on probe drift
         # Preserve the original red-check semantics so branch protection /
-        # required-status-check workflows still see drift as a failure.
+        # required-status-check workflows still see drift as a failure. This
+        # also keeps the job red when the scrub refuses to post (safe=false):
+        # a withheld report must never present as a green check.
         if: steps.secrets.outputs.configured == 'true' && steps.probe.outcome == 'failure'
         run: exit 1
