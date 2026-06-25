@@ -18,7 +18,7 @@ pytestmark = pytest.mark.live_write
 
 async def _container_state(live_mcp_client, container_id: str) -> str:
     res = await live_mcp_client.call_tool("unraid_get_container", {"container_id": container_id})
-    return (res.structured_content or {}).get("state", "")
+    return ((res.structured_content or {}).get("state") or "").lower()
 
 
 async def _stop_start_cycle(live_mcp_client, mcptest_container, request: pytest.FixtureRequest) -> None:
