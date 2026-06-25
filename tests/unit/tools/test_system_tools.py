@@ -52,6 +52,12 @@ class TestUnraidGetRegistration:
         assert result.structured_content == {"type": "PRO", "expires": "2099-01-01"}
         mock.get_registration.assert_awaited_once()
 
+    async def test_auth_error_surfaces_as_tool_error(self, client_rw):
+        client, mock = client_rw
+        mock.get_registration.side_effect = UnraidAuthError("Invalid API key", status_code=401)
+        with pytest.raises(ToolError, match="Authentication failed"):
+            await client.call_tool("unraid_get_registration")
+
 
 class TestUnraidGetConnect:
     async def test_happy_path_returns_dict(self, client_rw):
@@ -95,6 +101,13 @@ class TestUnraidListServices:
         assert result.structured_content["result"][0]["id"] == "nginx"
         assert result.structured_content["result"][0]["online"] is True
         assert result.structured_content["result"][1]["id"] == "samba"
+        mock.list_services.assert_awaited_once()
+
+    async def test_empty_list_returns_empty_result(self, client_rw):
+        client, mock = client_rw
+        mock.list_services.return_value = []
+        result = await client.call_tool("unraid_list_services")
+        assert result.structured_content["result"] == []
         mock.list_services.assert_awaited_once()
 
 
@@ -146,6 +159,13 @@ class TestUnraidListTimezoneOptions:
         result = await client.call_tool("unraid_list_timezone_options")
         assert result.structured_content["result"][0]["value"] == "America/New_York"
         assert result.structured_content["result"][1]["value"] == "UTC"
+        mock.list_timezone_options.assert_awaited_once()
+
+    async def test_empty_list_returns_empty_result(self, client_rw):
+        client, mock = client_rw
+        mock.list_timezone_options.return_value = []
+        result = await client.call_tool("unraid_list_timezone_options")
+        assert result.structured_content["result"] == []
         mock.list_timezone_options.assert_awaited_once()
 
 
