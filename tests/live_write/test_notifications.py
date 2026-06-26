@@ -1,10 +1,12 @@
 """Live mutating tests for notification tools.
 
-All three tests gate on a ``mcptest_*``-titled notification existing in
-the active list. Without this guard the tests would archive or delete
-arbitrary user-visible notifications on the live tower (alerts, parity
-warnings, etc.) — the third layer of the live-write safety net (see
-``conftest.py`` header).
+The archive and delete tests self-seed their own ``mcptest_*``-titled
+notification via the ``seed_notification`` fixture and only ever act on
+that id, so they never touch arbitrary user-visible notifications on the
+live tower. ``test_archive_all`` cannot self-scope (it archives the whole
+active list), so it gates: it skips unless every active notification is
+``mcptest_*``-titled — the live-write safety net (see ``conftest.py``
+header).
 
 Test function names intentionally embed the underlying tool name so the
 manifest <-> live-test parity meta-test can match each tool to a test ID.
