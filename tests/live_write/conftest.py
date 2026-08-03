@@ -21,12 +21,18 @@ from fastmcp import Client
 from tests.live_write._gates import MCPTEST_PREFIX as _MCPTEST_PREFIX
 from tests.live_write._gates import assert_mcptest as _assert_mcptest
 from tests.live_write._gates import require_writes_enabled
-from unraid_mcp.clients.unraid import MUTATION_DELETE_NOTIFICATION, UnraidClient
+from tests.live_write._teardown import NOTIFICATION_BINS as _NOTIFICATION_BINS
+from tests.live_write._teardown import PAGE_SIZE as _PAGE_SIZE
+from tests.live_write._teardown import build_raw_client as _build_raw_client
+from tests.live_write._teardown import delete_notification_any_state as _delete_notification_any_state
+from tests.live_write._teardown import select_mcptest_orphans as _select_mcptest_orphans
 from unraid_mcp.config import UnraidConfig, UnraidMode
 from unraid_mcp.server import create_server
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+
+    from unraid_mcp.clients.unraid import UnraidClient
 
 _MUTATION_CREATE_NOTIFICATION = """
 mutation CreateNotification($input: NotificationData!) {
@@ -82,43 +88,6 @@ def cleanup_tool_call(label: str, tool: str, arguments: dict[str, object]) -> No
             await fresh.call_tool(tool, arguments)
 
     run_cleanup(label, _do)
-
-
-def _build_raw_client() -> UnraidClient:
-    """A fresh raw GraphQL client for operations with no MCP tool (e.g. seeding)."""
-    cfg = UnraidConfig(unraid_mode=UnraidMode.READWRITE)
-    if cfg.unraid_api_key is None:
-        raise RuntimeError("UNRAID_API_KEY must be set for live_write seeding")
-    return UnraidClient(
-        graphql_url=cfg.graphql_url,
-        api_key=cfg.unraid_api_key,
-        verify_ssl=cfg.unraid_verify_ssl,
-        timeout=cfg.unraid_request_timeout,
-        max_retries=cfg.unraid_max_retries,
-    )
-
-
-async def _delete_notification_any_state(notification_id: str) -> None:
-    """Delete from both unread and archive lists (state is unknown at teardown).
-
-    The notification exists in exactly one state, so one of the two mutations is
-    expected to fail — that failure is suppressed. But if *both* fail the
-    notification is orphaned on the live tower for a real reason (auth revoked,
-    network down, server error), so re-raise to let ``run_cleanup`` surface it
-    instead of silently leaking the fixture.
-    """
-    client = _build_raw_client()
-    failures: list[Exception] = []
-    try:
-        for ntype in ("ARCHIVE", "UNREAD"):
-            try:
-                await client.mutate(MUTATION_DELETE_NOTIFICATION, variables={"id": notification_id, "type": ntype})
-            except Exception as exc:
-                failures.append(exc)
-    finally:
-        await client.close()
-    if len(failures) == 2:
-        raise failures[0]
 
 
 async def _resolve_seeded_id(client: UnraidClient, title: str, before: set[str]) -> str:
@@ -295,11 +264,16 @@ def _orphan_scan() -> Iterator[None]:
     """
 
     async def _run_scan() -> None:
+        notif_orphans: list[dict[str, object]] = []
         try:
             cfg = UnraidConfig(unraid_mode=UnraidMode.READWRITE)
             server = create_server(cfg)
             async with Client(server) as scan_client:
-                notifs = (await scan_client.call_tool("unraid_list_notifications", {})).structured_content
+                for ntype in _NOTIFICATION_BINS:
+                    listing = await scan_client.call_tool(
+                        "unraid_list_notifications", {"notification_type": ntype, "limit": _PAGE_SIZE}
+                    )
+                    notif_orphans.extend(_select_mcptest_orphans(listing.structured_content))
         except Exception as exc:
             log.exception("orphan scan failed")
             banner = (
@@ -315,13 +289,8 @@ def _orphan_scan() -> Iterator[None]:
             )
             sys.stderr.write(banner)
             sys.stderr.flush()
-            return
-
-        if not isinstance(notifs, list):
-            return
-        notif_orphans = [
-            n for n in notifs if isinstance(n, dict) and str(n.get("title", "")).lower().startswith(_MCPTEST_PREFIX)
-        ]
+            # Fall through: a bin that was scanned before the failure may
+            # already have found orphans worth naming.
 
         if notif_orphans:
             msg_lines = ["\n" + "=" * 72, "ORPHAN mcptest_* ASSETS DETECTED — clean up manually:"]
