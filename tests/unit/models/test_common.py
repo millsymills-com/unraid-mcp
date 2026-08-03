@@ -33,6 +33,6 @@ def test_coerce_bigint_bool_returns_none() -> None:
 
 
 def test_bigint_field_accepts_int_and_str() -> None:
-    assert _Sized(size=42).size == "42"
-    assert _Sized(size="42").size == "42"
+    assert _Sized.model_validate({"size": 42}).size == "42"
+    assert _Sized.model_validate({"size": "42"}).size == "42"
     assert _Sized().size is None
