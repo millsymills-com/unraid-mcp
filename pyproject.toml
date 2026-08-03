@@ -136,10 +136,19 @@ docstring-code-format = true
 python-version = "3.13"
 
 [tool.ty.src]
-include = ["src"]
+include = ["src", "tests"]
 
 [tool.ty.rules]
 unresolved-import = "ignore"
+
+# `BaseSettings.__init__` declares the `_env_file` keyword, but ty resolves the
+# pydantic-synthesized field initializer instead and reports it as unknown.
+# Scoped to the one module that passes it; argument *types* are still checked.
+[[tool.ty.overrides]]
+include = ["tests/unit/test_config.py"]
+
+[tool.ty.overrides.rules]
+unknown-argument = "ignore"
 
 # =============================================================================
 # Pytest — testing
