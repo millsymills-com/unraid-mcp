@@ -32,7 +32,7 @@ repos:
         require_serial: true
       - id: ty
         name: ty (uv)
-        entry: uv run ty check src/unraid_mcp/
+        entry: uv run ty check src tests
         language: system
         types: [python]
         pass_filenames: false

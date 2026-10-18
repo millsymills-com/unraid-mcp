@@ -11,6 +11,8 @@ populate_by_name=True. Invariants verified here:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
@@ -21,11 +23,14 @@ from unraid_mcp.models.notifications import Notification
 from unraid_mcp.models.shares import Share
 from unraid_mcp.models.users import User
 
+if TYPE_CHECKING:
+    from pydantic import BaseModel
+
 pytestmark = pytest.mark.property
 
 _NO_FUNC_FIXTURE_HEALTHCHECK = settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
 
-_MODEL_FIELDS: list[tuple[type, str, object]] = [
+_MODEL_FIELDS: list[tuple[type[BaseModel], str, object]] = [
     (DockerContainer, "id", "abc123"),
     (DockerContainer, "image", "nginx:alpine"),
     (DockerContainer, "auto_start", True),
@@ -59,7 +64,7 @@ _JSON_VALUES = st.one_of(
     )
 )
 def test_unknown_fields_tolerated_and_known_round_trips(
-    model_cls: type, field: str, value: object, extras: dict[str, object]
+    model_cls: type[BaseModel], field: str, value: object, extras: dict[str, object]
 ) -> None:
     """Arbitrary extras don't crash validation; the known field survives.
 
@@ -77,7 +82,7 @@ def test_unknown_fields_tolerated_and_known_round_trips(
 
 
 @pytest.mark.parametrize(("model_cls", "field", "value"), _MODEL_FIELDS)
-def test_camel_case_alias_accepted(model_cls: type, field: str, value: object) -> None:
+def test_camel_case_alias_accepted(model_cls: type[BaseModel], field: str, value: object) -> None:
     """The camelCase alias for any snake_case field accepts the same value
     (populate_by_name=True + alias_generator=to_camel)."""
     camel = to_camel(field)

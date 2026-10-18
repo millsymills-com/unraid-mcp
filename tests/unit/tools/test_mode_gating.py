@@ -10,6 +10,7 @@ return a client when the runtime context disagrees.
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import TYPE_CHECKING, cast
 from unittest.mock import AsyncMock
 
 import pytest
@@ -22,19 +23,22 @@ from unraid_mcp.errors import UnraidInitFailedError, UnraidNotConfiguredError, U
 from unraid_mcp.tools._helpers import require_client, require_readwrite
 from unraid_mcp.tools.array import register_array_tools
 
+if TYPE_CHECKING:
+    from fastmcp import Context
 
-def _fake_ctx(*, config: UnraidConfig, client: object | None) -> SimpleNamespace:
+
+def _fake_ctx(*, config: UnraidConfig, client: object | None) -> Context:
     """Build a minimal FastMCP-Context stand-in.
 
     The helpers only read ``ctx.lifespan_context`` and treat it as the dict
     the lifespan yields (see ``server.make_server_lifespan``), so a
     `SimpleNamespace` with that attribute is enough.
     """
-    return SimpleNamespace(lifespan_context={"config": config, "client": client, "init_error": None})
+    return cast("Context", SimpleNamespace(lifespan_context={"config": config, "client": client, "init_error": None}))
 
 
-def _fake_ctx_with_init_error(*, config: UnraidConfig, error: Exception) -> SimpleNamespace:
-    return SimpleNamespace(lifespan_context={"config": config, "client": None, "init_error": error})
+def _fake_ctx_with_init_error(*, config: UnraidConfig, error: Exception) -> Context:
+    return cast("Context", SimpleNamespace(lifespan_context={"config": config, "client": None, "init_error": error}))
 
 
 class TestRequireClient:

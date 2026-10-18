@@ -59,7 +59,7 @@ jobs:
         run: uv sync --extra dev
 
       - name: ty
-        run: uv run ty check src/unraid_mcp/
+        run: uv run ty check src tests
 
   test:
     name: Test (Python ${{ matrix.python-version }})
