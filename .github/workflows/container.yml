@@ -1,0 +1,32 @@
+name: Container validation
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  container:
+    name: Container build and trust
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build pinned runtime
+        run: docker build --pull --tag unraid-mcp:ci .
+      - name: Offline stdio discovery
+        run: >-
+          docker run --rm --network none
+          --mount type=bind,src="${{ github.workspace }}/scripts/container_checks.py",dst=/checks.py,readonly
+          --entrypoint python unraid-mcp:ci /checks.py smoke
+      - name: Runtime and installer trust checks
+        run: >-
+          docker run --rm
+          --mount type=bind,src="${{ github.workspace }}/scripts/container_checks.py",dst=/checks.py,readonly
+          --entrypoint python unraid-mcp:ci /checks.py trust
