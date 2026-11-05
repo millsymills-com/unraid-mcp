@@ -105,10 +105,43 @@ def trust():
                 assert result.returncode == 0, "uv normal TLS control failed"
             else:
                 assert result.returncode != 0 and re.search(
-                    r"(?i)(unknownissuer|certificate.*(unknown issuer|revoked|untrusted)|certificaterevoked)",
+                    r"(?i)(unknownissuer|certdistrusted|certificate.*(unknown issuer|revoked|untrusted)|certificaterevoked)",
                     result.stderr,
                 ), f"uv distrust not established for {url}: {result.stderr[-600:]}"
                 print(f"uv rejected {url} with certificate verification failure")
+            # Exercise pip's actual combined system/bundled trust path as well.
+            pip_result = subprocess.run(
+                [
+                    "/usr/local/bin/python",
+                    "-I",
+                    "-m",
+                    "pip",
+                    "--isolated",
+                    "--disable-pip-version-check",
+                    "index",
+                    "versions",
+                    "pip",
+                    "--index-url",
+                    url,
+                    "--retries",
+                    "0",
+                    "--timeout",
+                    "20",
+                    "--no-cache-dir",
+                ],
+                text=True,
+                capture_output=True,
+                timeout=90,
+            )
+            if url.startswith("https://pypi.org/"):
+                assert pip_result.returncode == 0, "pip normal TLS control failed"
+            else:
+                output = pip_result.stdout + pip_result.stderr
+                assert pip_result.returncode != 0 and re.search(
+                    r"(?i)(unable to get local issuer certificate|certificate revoked|certificate rejected|certdistrusted)",
+                    output,
+                ), f"pip distrust not established for {url}: {output[-600:]}"
+                print(f"pip rejected {url} with certificate verification failure")
 
 
 async def smoke():
