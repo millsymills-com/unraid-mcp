@@ -119,6 +119,7 @@ async def smoke():
     assert not os.environ.get("UNRAID_API_KEY")
     transport = StdioTransport(
         command="unraid-mcp",
+        args=[],
         env={
             "UNRAID_API_KEY": "",
             "UNRAID_HOST": "unconfigured.invalid",
