@@ -59,6 +59,7 @@ def _server_env(graphql_url: str, *, mode: str = "readonly") -> dict[str, str]:
         "UNRAID_USE_HTTPS": "false",
         "UNRAID_VERIFY_SSL": "false",
         "UNRAID_API_KEY": "test-key",
+        "FASTMCP_CHECK_FOR_UPDATES": "off",
         "UNRAID_MODE": mode,
         "UNRAID_REQUEST_TIMEOUT": "5",
         "UNRAID_MAX_RETRIES": "0",

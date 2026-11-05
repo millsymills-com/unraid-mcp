@@ -104,6 +104,7 @@ async def test_lifespan_shuts_down_on_session_close(mock_graphql_endpoint, monke
             "UNRAID_USE_HTTPS": "false",
             "UNRAID_VERIFY_SSL": "false",
             "UNRAID_API_KEY": "test-key",
+            "FASTMCP_CHECK_FOR_UPDATES": "off",
         },
     )
     async with Client(transport) as client:
