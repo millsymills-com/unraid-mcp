@@ -177,6 +177,17 @@ A [`Dockerfile`](Dockerfile) is included for operators who prefer containerized 
 docker build -t unraid-mcp:latest .
 ```
 
+The default Python and uv images are pinned by digest. Container CI builds the
+frozen lock, checks non-root stdio discovery with networking disabled, and tests
+public TLS controls plus direct and AAA cross-signed incident-chain rejection in
+the image's system, certifi and installer trust paths. A timeout fails validation;
+it is not evidence of distrust. No Unraid credentials are used in these checks.
+
+These checks cover the built image only. Rebuild and restart existing deployments
+separately; custom CA mounts, TLS proxies and an overridden `PYTHON_IMAGE` require
+their own validation. Do not disable TLS verification to restore connectivity.
+See [the incident guidance](https://github.com/PrefectHQ/fastmcp/blob/main/SECURITY.md#certificate-authority-incident-october-2026).
+
 Because MCP is a stdio protocol, the container is meant to be launched *per MCP session*; the client spawns `docker run -i` on demand. Example Claude Desktop config pointing at the container:
 
 ```jsonc
