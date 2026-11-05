@@ -76,7 +76,7 @@ def _inherited_path() -> str:
 def _build_transport(httpserver: HTTPServer, *, mode: str) -> StdioTransport:
     graphql_url = f"http://{httpserver.host}:{httpserver.port}/graphql"
     env = _server_env(graphql_url, mode=mode)
-    return StdioTransport(command="uv", args=["run", "unraid-mcp"], env=env)
+    return StdioTransport(command="uv", args=["run", "unraid-mcp"], env=env, keep_alive=False)
 
 
 @pytest_asyncio.fixture
