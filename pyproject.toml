@@ -35,17 +35,19 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=9.0.3",
-    "pytest-asyncio>=1.4.0",
+    # AnyIO 4.16 updates its pytest plugin for pytest 9.2 CallSpec.
+    "anyio>=4.16.0",
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.4.1",
     "pytest-cov>=7.1.0",
     "respx>=0.23.1",
-    "ruff>=0.15.22",
-    "ty>=0.0.61",
+    "ruff>=0.17.3",
+    "ty>=0.0.94",
     "bandit[toml]>=1.9.4",
     "pip-audit>=2.10.0",
-    "pre-commit>=4.6.0",
-    "hypothesis>=6.158.0",
-    "pytest-httpserver>=1.1.0",
+    "pre-commit>=4.7.0",
+    "hypothesis>=6.170.13",
+    "pytest-httpserver>=1.2.0",
     "graphql-core>=3.2.12,<3.3",
     "python-dotenv>=1.0.0",
     "mutmut>=3.6.0",

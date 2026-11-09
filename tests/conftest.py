@@ -59,7 +59,9 @@ def _isolate_unraid_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in list(os.environ):
         if name.startswith(_UNRAID_ENV_PREFIX):
             monkeypatch.delenv(name, raising=False)
-    monkeypatch.setitem(UnraidConfig.model_config, "env_file", None)
+    isolated_config = UnraidConfig.model_config.copy()
+    isolated_config["env_file"] = None
+    monkeypatch.setattr(UnraidConfig, "model_config", isolated_config)
 
 
 @pytest.fixture
