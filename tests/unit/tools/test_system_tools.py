@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 
 from unraid_mcp.errors import UnraidAuthError
@@ -11,6 +12,22 @@ from unraid_mcp.models.settings import ApiConfig, ApiSettings, DisplaySettings, 
 from unraid_mcp.models.system import CpuInfo, OsInfo, SystemInfo
 from unraid_mcp.models.system_time import SystemTime, TimeZoneOption
 from unraid_mcp.models.vars import Vars
+from unraid_mcp.tools.system import register_system_tools
+
+SYSTEM_READ_TOOLS = (
+    "unraid_get_info",
+    "unraid_get_flash",
+    "unraid_get_registration",
+    "unraid_get_connect",
+    "unraid_get_network",
+    "unraid_get_cloud",
+    "unraid_list_services",
+    "unraid_get_display_settings",
+    "unraid_get_api_settings",
+    "unraid_get_system_time",
+    "unraid_list_timezone_options",
+    "unraid_get_vars",
+)
 
 
 class TestUnraidGetInfo:
@@ -24,16 +41,6 @@ class TestUnraidGetInfo:
         assert result.structured_content["os"]["platform"] == "linux"
         assert result.structured_content["os"]["hostname"] == "tower"
         assert result.structured_content["cpu"]["cores"] == 8
-
-    async def test_auth_error_surfaces_as_tool_error(self, client_rw):
-        client, mock = client_rw
-        mock.get_info.side_effect = UnraidAuthError("Invalid API key", status_code=401)
-        with pytest.raises(ToolError, match="Authentication failed"):
-            await client.call_tool("unraid_get_info")
-
-    async def test_unconfigured_surfaces_as_not_configured_tool_error(self, client_rw_no_key):
-        with pytest.raises(ToolError, match="Unraid API not configured"):
-            await client_rw_no_key.call_tool("unraid_get_info")
 
 
 class TestUnraidGetFlash:
@@ -51,12 +58,6 @@ class TestUnraidGetRegistration:
         result = await client.call_tool("unraid_get_registration")
         assert result.structured_content == {"type": "PRO", "expires": "2099-01-01"}
         mock.get_registration.assert_awaited_once()
-
-    async def test_auth_error_surfaces_as_tool_error(self, client_rw):
-        client, mock = client_rw
-        mock.get_registration.side_effect = UnraidAuthError("Invalid API key", status_code=401)
-        with pytest.raises(ToolError, match="Authentication failed"):
-            await client.call_tool("unraid_get_registration")
 
 
 class TestUnraidGetConnect:
@@ -183,3 +184,35 @@ class TestUnraidGetVars:
         assert result.structured_content["name"] == "tower"
         assert result.structured_content["regState"] == "PRO"
         mock.get_vars.assert_awaited_once()
+
+
+class TestSystemReadToolErrorPaths:
+    """Error paths for every system read tool.
+
+    The mapping from client exception to ``ToolError`` lives in
+    ``unraid_tool``/``handle_client_error``, so these cases pin each tool to
+    it: a tool registered without the decorator, or one that catches its own
+    exceptions, returns a payload instead of raising and fails here.
+    """
+
+    async def test_parametrization_covers_every_registered_system_read_tool(self):
+        mcp = FastMCP(name="unraid-mcp-test")
+        register_system_tools(mcp)
+        # Compare against the read subset, not every registration: a write
+        # tool added here needs write-mode gating, not these read fixtures.
+        read_tools = {tool.name for tool in await mcp.list_tools() if "write" not in tool.tags}
+        assert read_tools == set(SYSTEM_READ_TOOLS)
+
+    @pytest.mark.parametrize("tool_name", SYSTEM_READ_TOOLS)
+    async def test_auth_error_surfaces_as_tool_error(self, client_rw, tool_name):
+        client, mock = client_rw
+        client_method = getattr(mock, tool_name.removeprefix("unraid_"))
+        client_method.side_effect = UnraidAuthError("Invalid API key", status_code=401)
+        with pytest.raises(ToolError, match="Authentication failed"):
+            await client.call_tool(tool_name)
+        client_method.assert_awaited_once()
+
+    @pytest.mark.parametrize("tool_name", SYSTEM_READ_TOOLS)
+    async def test_unconfigured_surfaces_as_not_configured_tool_error(self, client_rw_no_key, tool_name):
+        with pytest.raises(ToolError, match="Unraid API not configured"):
+            await client_rw_no_key.call_tool(tool_name)

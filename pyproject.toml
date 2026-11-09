@@ -22,14 +22,14 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "fastmcp>=3.4.4,<4.0.0",
+    "fastmcp>=3.4.11,<4.0.0",
     "httpx>=0.28.1",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.1",
     "tenacity>=9.1.4",
     # Pulled in transitively via fastmcp -> mcp; floors lifted here to patched
-    # versions so pip-audit is clean (PYSEC-2026-175/177/178/179, PYSEC-2026-161).
-    "pyjwt>=2.13.0",
+    # versions; keep these floors aligned with current security guidance.
+    "pyjwt>=2.15.1",
     "starlette>=1.0.1",
 ]
 
@@ -46,7 +46,7 @@ dev = [
     "pre-commit>=4.6.0",
     "hypothesis>=6.158.0",
     "pytest-httpserver>=1.1.0",
-    "graphql-core>=3.2.6",
+    "graphql-core>=3.2.12,<3.3",
     "python-dotenv>=1.0.0",
     "mutmut>=3.6.0",
 ]
@@ -62,6 +62,29 @@ Issues = "https://github.com/millsymills-com/unraid-mcp/issues"
 # =============================================================================
 # Ruff — linting and formatting
 # =============================================================================
+[tool.uv]
+# Patched transitive versions for the reproducible uv environment. These
+# constraints do not replace package metadata for other installers.
+constraint-dependencies = [
+    "python-multipart>=0.0.27",
+    "werkzeug>=3.1.9",
+    "anyio>=4.14.2",
+    "authlib>=1.9.1",
+    "certifi>=2026.10.19",
+    "cryptography>=50.0.2",
+    "dnspython>=2.9.0",
+    "filelock>=4.2.9",
+    "joserfc>=1.7.6",
+    "mcp>=1.30.0,<2",
+    "msgpack>=1.2.3",
+    "opentelemetry-api>=1.45.1",
+    "pip>=26.2.2",
+    "pyjwt>=2.15.1",
+    "urllib3>=2.8.0",
+    "virtualenv>=21.14.13",
+]
+
+
 [tool.ruff]
 target-version = "py313"
 line-length = 120
