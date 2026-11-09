@@ -75,15 +75,27 @@ async def test_graphql_error_surfaces_as_tool_error(mcp_session_readwrite, mock_
     assert "synthetic" in str(exc.value).lower() or "graphql" in str(exc.value).lower()
 
 
-async def test_lifespan_shuts_down_on_session_close(mock_graphql_endpoint) -> None:
+async def test_lifespan_shuts_down_on_session_close(mock_graphql_endpoint, monkeypatch) -> None:
     """Server starts, advertises capabilities, shuts down cleanly when stdin closes."""
     import os
 
+    import anyio
     from fastmcp import Client
     from fastmcp.client.transports import StdioTransport
+    from mcp.client import stdio
 
+    processes = []
+    original_create = stdio._create_platform_compatible_process
+
+    async def capture_process(*args, **kwargs):
+        process = await original_create(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr(stdio, "_create_platform_compatible_process", capture_process)
     transport = StdioTransport(
         command="uv",
+        keep_alive=False,
         args=["run", "unraid-mcp"],
         env={
             **os.environ,
@@ -92,10 +104,22 @@ async def test_lifespan_shuts_down_on_session_close(mock_graphql_endpoint) -> No
             "UNRAID_USE_HTTPS": "false",
             "UNRAID_VERIFY_SSL": "false",
             "UNRAID_API_KEY": "test-key",
+            "FASTMCP_CHECK_FOR_UPDATES": "off",
         },
     )
     async with Client(transport) as client:
         result = await client.list_tools()
         assert result is not None
-    # If we got here without the `async with` raising, the subprocess
-    # exited cleanly when stdin closed.
+    assert len(processes) == 1
+    process = processes[0]
+    try:
+        assert process.returncode is not None, "stdio subprocess survived the client context"
+        assert process.stdin is not None
+        assert process.stdout is not None
+        with pytest.raises(anyio.ClosedResourceError):
+            await process.stdin.send(b"")
+        with pytest.raises(anyio.ClosedResourceError):
+            await process.stdout.receive()
+    finally:
+        # Also clean up after an assertion failure, keeping the regression isolated.
+        await transport.close()
