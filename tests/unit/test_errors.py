@@ -4,7 +4,7 @@ Mapping tests (status code / message wording / `ToolError` passthrough) live
 in :mod:`tests.unit.test_config`. This module owns the logging contract added
 for GH-76: every typed branch must emit a log record at the right level
 before re-raising, and the unexpected branch keeps its existing traceback
-emission via ``logger.exception``.
+emission using the exception passed to the handler.
 """
 
 from __future__ import annotations
@@ -97,11 +97,26 @@ class TestHandleClientErrorLogging:
 
     def test_unexpected_error_still_logs_exception(self, caplog: pytest.LogCaptureFixture) -> None:
         caplog.set_level(logging.ERROR, logger=_LOGGER_NAME)
+        error = RuntimeError("kaboom")
         with pytest.raises(Exception, match="Unexpected error"):
-            handle_client_error(RuntimeError("kaboom"))
+            handle_client_error(error)
         record = next(r for r in caplog.records if r.name == _LOGGER_NAME)
         assert record.levelno == logging.ERROR
         assert record.exc_info is not None
+        assert record.exc_info[1] is error
+
+    def test_unexpected_error_keeps_original_traceback(self, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.ERROR, logger=_LOGGER_NAME)
+        try:
+            raise RuntimeError("original failure")
+        except RuntimeError as error:
+            original = error
+        with pytest.raises(Exception, match="Unexpected error"):
+            handle_client_error(original)
+        record = next(r for r in caplog.records if r.name == _LOGGER_NAME)
+        assert record.exc_info is not None
+        assert record.exc_info[1] is original
+        assert record.exc_info[2] is original.__traceback__
 
 
 class TestHandleClientErrorValidationMapping:

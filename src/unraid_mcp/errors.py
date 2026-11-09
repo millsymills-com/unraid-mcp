@@ -137,7 +137,7 @@ def _classify_error(error: Exception) -> ToolError:
         if isinstance(error, exc_type):
             logger.log(level, "%s: %s", type(error).__name__, error)
             return ToolError(template.format(error=error))
-    logger.exception("Unexpected error in tool execution")
+    logger.error("Unexpected error in tool execution", exc_info=error)
     return ToolError(f"Unexpected error: {error}")
 
 

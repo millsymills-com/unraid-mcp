@@ -41,6 +41,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   lookup logic; the corresponding `list_*` methods are unchanged (#36).
 
 ### Fixed
+- Preserve the original exception and traceback when reporting unexpected tool errors, including calls outside an active exception handler.
 - Corrected the GitHub org in documented clone, install, and
   security-reporting URLs and in packaging metadata from
   `millsmillsymills` to `millsymills-com`, matching the actual remote
