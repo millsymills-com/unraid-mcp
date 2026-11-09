@@ -1,5 +1,6 @@
 """Tests for server creation and mode gating."""
 
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 from unraid_mcp.config import UnraidConfig, UnraidMode
@@ -7,8 +8,8 @@ from unraid_mcp.errors import UnraidConnectionError
 from unraid_mcp.server import create_server, make_server_lifespan
 
 
-def _make_config(**overrides):
-    defaults = {
+def _make_config(**overrides: Any) -> UnraidConfig:
+    defaults: dict[str, Any] = {
         "_env_file": None,
         "unraid_api_key": "test-key",
     }

@@ -13,7 +13,7 @@ import logging
 import sys
 import time
 import traceback
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from fastmcp import Client
@@ -30,7 +30,7 @@ from unraid_mcp.config import UnraidConfig, UnraidMode
 from unraid_mcp.server import create_server
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+    from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine, Iterator
 
     from unraid_mcp.clients.unraid import UnraidClient
 
@@ -43,7 +43,7 @@ mutation CreateNotification($input: NotificationData!) {
 log = logging.getLogger(__name__)
 
 
-def run_cleanup(label: str, coro_factory: Callable[[], Awaitable[object]]) -> None:
+def run_cleanup(label: str, coro_factory: Callable[[], Coroutine[Any, Any, object]]) -> None:
     """Run a cleanup coroutine and surface failures loudly (#177).
 
     Test finalizers used to wrap cleanup in ``contextlib.suppress(Exception)``,
@@ -202,6 +202,8 @@ async def mcptest_container(live_mcp_client: Client) -> dict:
     """Discover an `mcptest-*` container, fail loud if name doesn't match."""
     listing = await live_mcp_client.call_tool("unraid_list_containers", {})
     containers = listing.structured_content
+    if containers is None:
+        pytest.fail("unraid_list_containers returned no structured content")
     raw = containers if isinstance(containers, list) else containers.get("result", [])
     for c in raw:
         names = c.get("names") or []
