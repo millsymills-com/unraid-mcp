@@ -102,7 +102,7 @@ class TestHandleClientErrorLogging:
             handle_client_error(error)
         record = next(r for r in caplog.records if r.name == _LOGGER_NAME)
         assert record.levelno == logging.ERROR
-        assert record.exc_info is not None
+        assert isinstance(record.exc_info, tuple)
         assert record.exc_info[1] is error
 
     def test_unexpected_error_keeps_original_traceback(self, caplog: pytest.LogCaptureFixture) -> None:
@@ -114,7 +114,7 @@ class TestHandleClientErrorLogging:
         with pytest.raises(Exception, match="Unexpected error"):
             handle_client_error(original)
         record = next(r for r in caplog.records if r.name == _LOGGER_NAME)
-        assert record.exc_info is not None
+        assert isinstance(record.exc_info, tuple)
         assert record.exc_info[1] is original
         assert record.exc_info[2] is original.__traceback__
 
