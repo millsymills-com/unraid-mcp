@@ -23,28 +23,32 @@ Unraid 7.2+ removed `Query.users`, `addUser`, and `deleteUser` from the GraphQL 
 
 ## Quick Start
 
+Requires [uv](https://docs.astral.sh/uv/) and Python 3.13 or newer.
+
+### From a source checkout
+
+Run these commands from the checkout directory. `uv run` selects its managed
+`.venv`; `uv sync` alone does not put that environment on your shell’s PATH.
+
 ```bash
 # Install from source
 git clone https://github.com/millsymills-com/unraid-mcp.git
 cd unraid-mcp
 uv sync
 
-# Or, install directly from git into another project's venv
-uv pip install git+https://github.com/millsymills-com/unraid-mcp.git
-
 # Configure
 cp .env.example .env
 # Edit .env with your Unraid host and API key
 
 # Run
-unraid-mcp
+uv run unraid-mcp
 ```
 
 Generate an API key in the Unraid WebGUI under **Settings → Management Access → API Keys**, or from a terminal on the server with `unraid-api apikey --create`. Enable the GraphQL API the first time via **Settings → Management Access → Developer Options**.
 
-Once configured, run `unraid-mcp --check-config` to verify connectivity before attaching an MCP client; it prints the resolved config (with the API key redacted), runs a single validation query, and exits 0 / 1 / 2 (ok / no key / validation failed).
+Once configured, run `uv run unraid-mcp --check-config` to verify connectivity before attaching an MCP client; it prints the resolved config (with the API key redacted), runs a single validation query, and exits 0 / 1 / 2 (ok / no key / validation failed).
 
-Before re-deploying against a new Unraid release, run `unraid-mcp --check-schema` to pre-flight upgrade compatibility; it introspects the live GraphQL schema and reports whether the types and fields this client queries are still present. Exit codes are `0` (all tracked fields present), `1` (no API key configured), and `2` (missing fields detected or connection failure). Sample drift output:
+Before re-deploying against a new Unraid release, run `uv run unraid-mcp --check-schema` to pre-flight upgrade compatibility; it introspects the live GraphQL schema and reports whether the types and fields this client queries are still present. Exit codes are `0` (all tracked fields present), `1` (no API key configured), and `2` (missing fields detected or connection failure). Sample drift output:
 
 ```
 Detected 2 schema-drift issue(s):
@@ -53,6 +57,26 @@ Detected 2 schema-drift issue(s):
 ```
 
 > **Scope:** the check verifies field *presence* only. Argument renames or return-type changes on fields that keep their name are not detected at boot; they surface as `GRAPHQL_VALIDATION_FAILED` at the first affected tool call.
+
+### Alternative: install into an existing virtual environment
+
+Use this path instead of cloning the repository. Activate a Python 3.13+ virtual
+environment first (or create one with `uv venv --python 3.13`):
+
+```bash
+# POSIX shells; on Windows PowerShell use .venv\Scripts\Activate.ps1
+source .venv/bin/activate
+uv pip install git+https://github.com/millsymills-com/unraid-mcp.git
+
+# Confirm the installed command resolves without credentials or a live server
+unraid-mcp --help
+```
+
+Keep the environment activated when running `unraid-mcp`, `unraid-mcp --check-config`,
+or `unraid-mcp --check-schema`. Configure `UNRAID_HOST` and `UNRAID_API_KEY` through
+environment variables or a `.env` file in the working directory. The configuration
+and schema checks contact your server; `--help` does not. For MCP clients, use the
+absolute path to this environment’s console script as shown below.
 
 ### Continuous schema drift check (CI)
 
@@ -103,7 +127,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 }
 ```
 
-If you installed from source into a venv, use the venv's python explicitly:
+If you installed from source into a venv, use the venv's console script explicitly:
 
 ```jsonc
 {
